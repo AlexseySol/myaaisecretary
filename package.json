@@ -1,0 +1,23 @@
+{
+  "name": "ai-secretary",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "eval:models": "vitest run --config eval/vitest.config.mts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "^5.9.3",
+    "vercel": "^60.1.3",
+    "vitest": "~4.1.0"
+  },
+  "dependencies": {
+    "@vercel/functions": "^3.9.9"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

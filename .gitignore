@@ -1,0 +1,8 @@
+node_modules/
+.vercel/
+.env
+.env.local
+*.log
+dist/
+
+eval/results.md

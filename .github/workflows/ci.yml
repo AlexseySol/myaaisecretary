@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # Deploys main after the checks pass — through a Vercel Deploy Hook, so it works whoever wrote the commit — then waits
+  # until the new version is live and wakes the bot, which sends «🆕 Бот оновлено» at once. Needs the repository secret
+  # VERCEL_DEPLOY_HOOK (Vercel → Settings → Git → Deploy Hooks, branch main) and the variable BOT_URL
+  # (https://<project>.vercel.app); without them these steps are skipped.
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Vercel
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "VERCEL_DEPLOY_HOOK is not set — skipping the deploy"; exit 0; fi
+          curl -fsS -X POST "$HOOK"
+      - name: Wait for the new version and wake the bot
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          BOT_URL: ${{ vars.BOT_URL }}
+        run: |
+          if [ -z "$HOOK" ] || [ -z "$BOT_URL" ]; then echo "VERCEL_DEPLOY_HOOK or BOT_URL is not set — skipping"; exit 0; fi
+          for i in $(seq 1 24); do
+            sleep 15
+            if curl -fsS "$BOT_URL/api/health" | grep -q "\"commit\":\"$GITHUB_SHA\""; then echo "live after $((i * 15)) s"; break; fi
+          done
+          curl -sS -o /dev/null -w "wake: %{http_code}\n" "$BOT_URL/api/setup" || true
