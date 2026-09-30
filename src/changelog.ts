@@ -12,6 +12,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    v: 10,
+    date: "2026-10-01",
+    added: ["🔄 Я оновлююся сам: щойно виходить нова версія, за годину вона вже в мене — нічого робити не треба"],
+  },
+  {
     v: 9,
     date: "2026-10-01",
     changed: [
