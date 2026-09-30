@@ -33,6 +33,8 @@ export const DEFAULT_VIDEOS: Record<Guide, string> = {
   telegram: "https://drive.google.com/file/d/1YJVHDBX5czzyU7kQ6S38jnNlzopAKCW3/view",
   bitrix: "https://drive.google.com/file/d/1B2s1FbKSfogaEgv4L7fSpiqF-AbX0nq7/view",
 };
+/** How each video is named in the folder — the link text in the guide. */
+const VIDEO_TITLES: Record<Guide, string> = { google: "Гугл", telegram: "Телеграм", bitrix: "Битрикс" };
 export const VIDEOS_FOLDER = "https://drive.google.com/drive/folders/1VwJAJykWX4eBCpYlny6cfiLFqd3ESBKL";
 
 export const GUIDE_MENU: InlineKeyboard = [
@@ -130,11 +132,12 @@ export async function showGuide(env: Env, chatId: number, w: Guide): Promise<voi
     await tg.call(method, { chat_id: chatId, [field]: video.f, caption: `▶️ Відео: ${GUIDES[w]}` }).catch(() => undefined);
   }
   const keyboard: InlineKeyboard = [];
-  if (video?.u) keyboard.push([{ text: "▶️ Дивитися відео", url: video.u }]);
+  // The video right in the guide, as a link named like the video.
+  const videoLine = video.u ? `🎥 <b>Відео:</b> ${link(video.u, video.u === DEFAULT_VIDEOS[w] ? VIDEO_TITLES[w] : "дивитися")}\n\n` : "";
   if (w === "bitrix" && !bitrixConfigured(env) && integrationSource(env, "bitrix") !== "variable") {
     keyboard.push([{ text: "🔗 Підключити Bitrix24", callback_data: "set:on:bitrix" }]);
   }
-  await tg.send(chatId, hiddenData({ k: "guide", w } satisfies GuideRef) + TEXT[w](env), keyboard.length ? { keyboard } : {});
+  await tg.send(chatId, hiddenData({ k: "guide", w } satisfies GuideRef) + videoLine + TEXT[w](env), keyboard.length ? { keyboard } : {});
 }
 
 /**

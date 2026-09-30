@@ -14,7 +14,7 @@ export const RELEASES: Release[] = [
   {
     v: 8,
     date: "2026-10-01",
-    added: ["🎥 Відео-інструкції: Google, Telegram і Bitrix24 — /help → 📖, кнопка «▶️ Дивитися відео»"],
+    added: ["🎥 Відео-інструкції: Google, Telegram і Bitrix24 — /help → 📖, посилання на відео прямо в інструкції"],
   },
   {
     v: 7,

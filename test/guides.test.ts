@@ -27,7 +27,7 @@ describe("📖 guides inside the bot", () => {
     expect(sent).toContain("pubsub.googleapis.com?project=my-proj");
     expect(sent).toContain("Desktop app");
     // The project's video comes with it until the owner adds their own.
-    expect(JSON.stringify(tgCalls(calls, "sendMessage").at(-1)!.reply_markup)).toContain("drive.google.com/file/d/1o1UOKdoZSm1j");
+    expect(sent).toContain('🎥 <b>Відео:</b> <a href="https://drive.google.com/file/d/1o1UOKdoZSm1j-d3cSjSd4-tVVB0HjeGh/view">Гугл</a>');
 
     await handleUpdate(env, press("guide:telegram"));
     expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("@BotFather");
@@ -57,6 +57,6 @@ describe("📖 guides inside the bot", () => {
     expect(tgCalls(calls, "sendVideo").at(-1)).toMatchObject({ video: "VID1" });
     expect(await handleGuideReply(env, reply("прибери відео"))).toBe(true);
     expect((await loadOwnerSettings(env)).gv).toEqual({});
-    expect(JSON.stringify(tgCalls(calls, "sendMessage").at(-1)!.reply_markup ?? {})).not.toContain("drive.google.com");
+    expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).not.toContain("drive.google.com");
   });
 });
