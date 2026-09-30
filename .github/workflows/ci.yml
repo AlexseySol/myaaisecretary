@@ -18,34 +18,51 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # Deploys main after the checks pass — through a Vercel Deploy Hook, so it works whoever wrote the commit — then waits
-  # until the new version is live and wakes the bot, which sends «🆕 Бот оновлено» at once. Needs the repository secret
-  # VERCEL_DEPLOY_HOOK (Vercel → Settings → Git → Deploy Hooks, branch main) and the variable BOT_URL
-  # (https://<project>.vercel.app); without them these steps are skipped.
+  # Deploys main to each bot after the checks pass, then wakes it so it sends «🆕 Бот оновлено» at once. One repository
+  # secret, VERCEL_DEPLOY — one line per bot (without it these steps are skipped; nothing is set up on Vercel's side):
+  #   <Vercel token> <project name> <bot address>   e.g.  vcp_abc… ai-secretary https://ai-secretary.vercel.app
+  # (a Deploy Hook URL on a line works too). CI uploads this code with the Vercel CLI, like a manual `vercel deploy --prod`.
   deploy:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      # Several bots from this repository: put one hook (and one bot address) per line in the same secret / variable.
-      - name: Deploy to Vercel
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Deploy each bot and wake it
         env:
-          HOOKS: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          DEPLOYS: ${{ secrets.VERCEL_DEPLOY }}
+          OLD_HOOKS: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          OLD_BOTS: ${{ vars.BOT_URL }}
         run: |
-          if [ -z "$HOOKS" ]; then echo "VERCEL_DEPLOY_HOOK is not set — skipping the deploy"; exit 0; fi
-          n=0
-          for hook in $HOOKS; do n=$((n + 1)); if curl -fsS -o /dev/null -X POST "$hook"; then echo "deploy $n started"; else echo "deploy $n: the hook did not answer"; fi; done
-      - name: Wait for the new version and wake each bot
-        env:
-          HOOKS: ${{ secrets.VERCEL_DEPLOY_HOOK }}
-          BOTS: ${{ vars.BOT_URL }}
-        run: |
-          if [ -z "$HOOKS" ] || [ -z "$BOTS" ]; then echo "VERCEL_DEPLOY_HOOK or BOT_URL is not set — skipping"; exit 0; fi
-          for bot in $BOTS; do
-            bot="${bot%/}"
+          if [ -z "$DEPLOYS$OLD_HOOKS" ]; then echo "VERCEL_DEPLOY is not set — skipping the deploy"; exit 0; fi
+          [ -n "$DEPLOYS" ] && npm ci --no-audit --no-fund > /dev/null
+          wake() {
+            # A hook deploys in the background: wait until this commit is live, then open /api/setup.
             for i in $(seq 1 24); do
-              if curl -fsS "$bot/api/health" | grep -q "\"commit\":\"$GITHUB_SHA\""; then echo "$bot: live after $((i * 15)) s"; break; fi
+              if curl -fsS "$1/api/health" | grep -q "\"commit\":\"$GITHUB_SHA\""; then break; fi
+              [ "$2" = wait ] || break
               sleep 15
             done
-            curl -sS -o /dev/null -w "$bot wake: %{http_code}\n" "$bot/api/setup" || true
+            curl -sS -o /dev/null -w "$1 wake: %{http_code}\n" "$1/api/setup" || true
+          }
+          printf '%s\n%s\n' "$DEPLOYS" "$OLD_HOOKS" | while read -r first project bot; do
+            [ -z "$first" ] && continue
+            case "$first" in
+              https://*)
+                if curl -fsS -o /dev/null -X POST "$first"; then echo "hook: deploy started"; else echo "hook: did not answer"; fi ;;
+              *)
+                rm -rf .vercel
+                if npx vercel link --yes --project "$project" --token "$first" > /dev/null 2>&1 \
+                  && npx vercel deploy --prod --yes --token "$first" > /dev/null 2>&1; then
+                  echo "$project: deployed"
+                  [ -n "$bot" ] && wake "${bot%/}" now
+                else
+                  echo "$project: deploy failed — check the token and the project name"
+                fi ;;
+            esac
           done
+          for bot in $OLD_BOTS; do wake "${bot%/}" wait; done

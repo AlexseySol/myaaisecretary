@@ -132,23 +132,23 @@ Drive. Голосові розпізнає той самий OpenRouter.
 
 | Що бачите | Що зробити |
 |---|---|
-| Бот не бачить оновлень з GitHub | Vercel → проєкт → **Settings → Git → Connect Git Repository** → цей репозиторій, гілка `main`. Надійніше — [Deploy Hook](#автодеплой-через-deploy-hook) |
+| Бот не бачить оновлень з GitHub | Один секрет `VERCEL_DEPLOY` у GitHub — [див. нижче](#автодеплой-кожне-оновлення-виходить-саме) |
 | Не приходять нагадування | `/settings` → ⏰ → **«🔁 Налаштувати»** — бот скаже, чого бракує |
 | «Не поставлено галочки» / немає памʼяті | перепідключіть Google й натисніть **«Вибрати все»** |
 | «Cloud Pub/Sub API вимкнено» | [увімкніть Cloud Pub/Sub API](https://console.cloud.google.com/apis/library/pubsub.googleapis.com) у проєкті Google-клієнта |
 | «403 access_denied … тестується» | [Audience](https://console.cloud.google.com/auth/audience) → **Publish app** |
 
-## Автодеплой через Deploy Hook
+## Автодеплой: кожне оновлення виходить саме
 
-Щоб кожне оновлення в `main` виходило саме, після тестів, і бот одразу писав «🆕 Бот оновлено»:
+Нічого налаштовувати у Vercel не треба — лише один секрет у GitHub:
 
-1. Vercel → проєкт → **Settings → Git → Deploy Hooks**: назва `github`, гілка `main` → **Create Hook** → скопіюйте адресу.
-2. GitHub → репозиторій → **Settings → Secrets and variables → Actions**:
-   - вкладка **Secrets** → **New repository secret**: `VERCEL_DEPLOY_HOOK` = адреса з кроку 1;
-   - вкладка **Variables** → **New repository variable**: `BOT_URL` = `https://<ваш-проєкт>.vercel.app`.
+1. Vercel → аватар → **Account Settings → Tokens** → **Create** → скопіюйте токен (`vcp_…`).
+2. GitHub → цей репозиторій → **Settings → Secrets and variables → Actions → New repository secret**:
+   імʼя `VERCEL_DEPLOY`, значення — рядок на кожного бота: `токен назва-проєкту адреса-бота`, наприклад
+   ```
+   vcp_abc123 ai-secretary https://ai-secretary.vercel.app
+   vcp_abc123 ai-secretary-2 https://ai-secretary-2.vercel.app
+   ```
 
-Далі CI (`.github/workflows/ci.yml`) після зелених тестів сам запускає деплой, чекає, поки нова версія запрацює, і будить бота.
-
-**Кілька ботів з одного репозиторію** (кілька проєктів Vercel): створіть Deploy Hook у **кожному** проєкті й покладіть
-усі адреси в той самий секрет `VERCEL_DEPLOY_HOOK` — кожну з нового рядка; так само адреси ботів — у `BOT_URL`,
-кожну з нового рядка. Інший спосіб — підключити до цього репозиторію кожен проєкт Vercel (Settings → Git → Connect).
+Далі після кожного оновлення CI перевіряє код тестами, завантажує його в кожен проєкт Vercel і будить бота — він
+одразу пише «🆕 Бот оновлено». Токен лежить лише в секретах GitHub: у коді його немає.
