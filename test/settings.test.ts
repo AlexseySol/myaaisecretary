@@ -27,14 +27,13 @@ describe("/settings in Telegram", () => {
     await handleUpdate(env, command("/settings"));
     const sent = tgCalls(calls, "sendMessage").at(-1)!;
     const text = String(sent.text);
-    expect(text).toContain("✅ Google Calendar");
-    expect(text).toContain("✅ Gmail");
-    expect(text).toContain("<b>Можна підключити</b>");
+    expect(text).toContain("✅ Google — календар, пошта");
+    expect(text).toContain("➕ Bitrix24");
     expect(text).toContain("➕ Zoom");
     expect(text).toContain("⏰ Нагадування: за 30 і 10 хв до зустрічі");
     expect(text).not.toMatch(/Vercel|REMINDER_MINUTES|LLM_MODEL|Environment/);
     const buttons = (sent.reply_markup as { inline_keyboard: { text: string; callback_data?: string }[][] }).inline_keyboard.flat();
-    expect(buttons.map((b) => b.callback_data).filter(Boolean)).toEqual(["set:rem", "set:dg", "set:mail", "set:mem", "guide:menu", "set:on:bitrix", "set:on:zoom"]);
+    expect(buttons.map((b) => b.callback_data).filter(Boolean)).toEqual(["set:tab:google", "set:tab:bitrix", "set:tab:zoom", "set:rem", "set:dg", "set:mail", "set:mem", "tour"]);
   });
 
   it("the owner picks reminder times with buttons; they are saved in the pinned message and used by reminders", async () => {
@@ -89,7 +88,8 @@ describe("/settings in Telegram", () => {
     const { env } = testEnv();
     await handleUpdate(env, command("/settings"));
     const msg = [...tg.messages.values()].at(-1)!;
-    expect(String(msg.text)).toContain("➕ Google Calendar");
+    expect(String(msg.text)).toContain("➕ Google");
+    expect(String(msg.text)).toContain("Почніть з Google");
     await handleUpdate(env, press("set:r:10", msg));
     expect(tgCalls(calls, "answerCallbackQuery").at(-1)!.text).toBe("Спершу підключіть Google");
   });

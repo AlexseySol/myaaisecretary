@@ -1,3 +1,4 @@
+import { CURRENT_VERSION } from "../changelog";
 import type { Env } from "../env";
 import { googleConfigured, googleRedirectUri } from "../env";
 import { decrypt, encrypt, fromBase64Url, signToken, verifyToken } from "../lib/crypto";
@@ -253,6 +254,8 @@ async function writeVault(env: Env, data: GrantData): Promise<void> {
     grantCache = { at: Date.now(), grant, messageId, data };
     return;
   }
+  // A new owner's first saved setting: «what is new» starts from this version.
+  if (data.s?.v === undefined) data = { ...data, s: { ...data.s, v: CURRENT_VERSION } };
   const msg = await tg.send(env.OWNER_TELEGRAM_ID, vaultMessage(data, grant?.email ?? null));
   await tg.call("pinChatMessage", { chat_id: env.OWNER_TELEGRAM_ID, message_id: msg.message_id, disable_notification: true });
   grantCache = { at: Date.now(), grant, messageId: msg.message_id, data };
@@ -300,7 +303,9 @@ async function saveGrant(env: Env, grant: GoogleGrant): Promise<void> {
   await loadGrant(env).catch(() => null);
   const previous = grantCache?.messageId;
   // Reconnecting keeps the owner's settings and integration keys.
-  const data: GrantData = { ...(grantCache?.data ?? { k: "google" }), t: await encrypt(env.ENCRYPTION_KEY, JSON.stringify(grant)) };
+  const base: GrantData = grantCache?.data ?? { k: "google" };
+  // A new owner connecting Google first: «what is new» starts from this version.
+  const data: GrantData = { ...base, s: { ...base.s, v: base.s?.v ?? CURRENT_VERSION }, t: await encrypt(env.ENCRYPTION_KEY, JSON.stringify(grant)) };
   const msg = await tg.send(env.OWNER_TELEGRAM_ID, vaultMessage(data, grant.email));
   await tg.call("pinChatMessage", { chat_id: env.OWNER_TELEGRAM_ID, message_id: msg.message_id, disable_notification: true });
   grantCache = { at: Date.now(), grant, messageId: msg.message_id, data };

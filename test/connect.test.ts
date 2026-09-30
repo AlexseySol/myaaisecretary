@@ -46,9 +46,10 @@ describe("connecting Bitrix24 and Zoom from /settings (no deployment variables)"
     // Google itself is still connected.
     expect(tg.pinned!.text).toContain("Google підключено");
 
-    // Now /bitrix works and /settings offers to disconnect it.
+    // Now /bitrix works and the Bitrix24 tab in /settings offers to disconnect it.
     await handleUpdate(env, text("/settings"));
-    const buttons = (tgCalls(calls, "sendMessage").at(-1)!.reply_markup as { inline_keyboard: { callback_data?: string }[][] }).inline_keyboard.flat();
+    await handleUpdate(env, press("set:tab:bitrix", lastBotMessage("Налаштування")));
+    const buttons = (tgCalls(calls, "editMessageText").at(-1)!.reply_markup as { inline_keyboard: { callback_data?: string }[][] }).inline_keyboard.flat();
     expect(buttons.map((b) => b.callback_data)).toContain("set:off:bitrix");
     await handleUpdate(env, press("set:off:bitrix", lastBotMessage("Налаштування")));
     resetGoogleCache();

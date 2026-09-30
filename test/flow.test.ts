@@ -95,14 +95,26 @@ describe("single owner", () => {
 });
 
 describe("/start", () => {
-  it("asks no questions: greets by the Telegram name and offers to connect Google", async () => {
+  it("asks no questions: first what the bot can do, then «⚙️ Налаштувати» with a tab per connection", async () => {
     const calls = mockFetch([]);
     const { env } = testEnv();
     await handleUpdate(env, textUpdate(OWNER, "/start"));
     const sent = tgCalls(calls, "sendMessage");
+    expect(sent.length).toBe(1);
     expect(String(sent[0]!.text)).toContain("Олександр Коваленко");
-    const button = (sent[1]!.reply_markup as { inline_keyboard: { url: string }[][] }).inline_keyboard[0]![0]!;
-    expect(button.url).toMatch(/^https:\/\/bot\.test\/api\/oauth\/start\?state=/);
+    expect(String(sent[0]!.text)).toContain("<b>Що я вмію</b>");
+    // Nothing pinned yet: the bot's storage appears only when something is saved.
+    expect(tg.pinned).toBeNull();
+    expect(JSON.stringify(sent[0]!.reply_markup)).toContain("set:open");
+    await handleUpdate(env, { update_id: 7, callback_query: { id: "c", from: { id: OWNER, is_bot: false, first_name: "О" }, data: "set:open" } });
+    const settings = tgCalls(calls, "sendMessage").at(-1)!;
+    expect(String(settings.text)).toContain("Налаштування");
+    expect(JSON.stringify(settings.reply_markup)).toContain("set:tab:google");
+    // The Google tab: the client is configured in the test deployment, so step 2 — sign in.
+    await handleUpdate(env, { update_id: 8, callback_query: { id: "c", from: { id: OWNER, is_bot: false, first_name: "О" }, data: "set:tab:google", message: tg.message(String(settings.text)) } });
+    const tab = tgCalls(calls, "editMessageText").at(-1)!;
+    expect(String(tab.text)).toContain("крок 2 із 2");
+    expect(JSON.stringify(tab.reply_markup)).toMatch(/https:\/\/bot\.test\/api\/oauth\/start\?state=/);
   });
 });
 

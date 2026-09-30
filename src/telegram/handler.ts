@@ -1,5 +1,6 @@
 import { forgetConversation } from "../agent/memory";
-import { helpText, sendConnectGoogle, startOnboarding } from "../bot/onboarding";
+import { helpText, sendConnectGoogle, startOnboarding, tourText } from "../bot/onboarding";
+import { sendTab } from "../bot/tabs";
 import { handleConnectAnswer } from "../bot/connect";
 import { handleSettingsButton, showSettings } from "../bot/settings";
 import { applyIntegrations } from "../integrations";
@@ -191,10 +192,19 @@ async function handleCallback(env: Env, cq: TgCallbackQuery): Promise<void> {
     await askGoogleClient(env, chatId);
     return;
   }
+  // «⚙️ Налаштувати» under the tour, «💡 Що я вмію» in the settings.
+  if (cq.data === "set:open" || cq.data === "tour") {
+    await new Telegram(env).answerCallback(cq.id).catch(() => undefined);
+    if (cq.data === "set:open") await showSettings(env, user);
+    else await new Telegram(env).send(chatId, tourText(user.full_name), { keyboard: [[{ text: "⚙️ Налаштувати", callback_data: "set:open" }]] });
+    return;
+  }
   const guide = /^guide:(menu|google|telegram|bitrix)$/.exec(cq.data ?? "");
   if (guide) {
     await new Telegram(env).answerCallback(cq.id).catch(() => undefined);
     if (guide[1] === "menu") await showGuideMenu(env, chatId);
+    // Google and Bitrix24: their settings tab (the step the owner is on); Telegram: the guide.
+    else if (guide[1] === "google" || guide[1] === "bitrix") await sendTab(env, chatId, guide[1]);
     else await showGuide(env, chatId, guide[1] as Guide);
     return;
   }

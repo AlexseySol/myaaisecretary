@@ -12,6 +12,7 @@ import { DIGEST_BLOCKS, DIGEST_TIMES, type DigestBlock, digestStatus, loadDigest
 import { integrationSource } from "../integrations";
 import { disconnect, INTEGRATION_NAMES, type Integration, startConnect } from "./connect";
 import type { User } from "./owner";
+import { type Tab, tabView } from "./tabs";
 
 /**
  * /settings: what is connected, what can be connected, and the owner's own choices (when to remind, the morning
@@ -48,61 +49,51 @@ async function mainView(env: Env, user: User): Promise<{ html: string; keyboard:
   const gmail = google && (await hasGmailScope(env));
   const marks = await reminderMarks(env);
   const digest = await digestEnabled(env);
-  const name = user.full_name ? `<b>${esc(user.full_name)}</b>` : "<b>Власник</b>";
-
-  const connected: string[] = [];
-  const available: string[] = [];
-  (google ? connected : available).push(line(google, "Google Calendar — зустрічі, розклад, запрошення"));
-  if (google) (gmail ? connected : available).push(line(gmail, gmail ? "Gmail — пошта" : "Gmail — перепідключіть Google й дозвольте пошту"));
-  else available.push(line(false, "Gmail — пошта (разом із Google)"));
   const drive = google && (await hasWorkspaceScope(env).catch(() => false));
-  (drive ? connected : available).push(
-    line(drive, drive ? "Google Диск, Таблиці й Документи — файли" : "Google Диск, Таблиці й Документи — перепідключіть Google з усіма галочками"),
-  );
-  connected.push(line(true, "Голосові повідомлення"));
   const awake = gmail && (await wakeReady(env));
-  (awake ? connected : available).push(line(awake, awake ? "Миттєві сповіщення про нові листи й нагадування" : "Сповіщення про листи й нагадування — /settings → ⏰"));
-  (bitrixConfigured(env) ? connected : available).push(line(bitrixConfigured(env), "Bitrix24 — задачі (/bitrix)"));
-  (zoomConfigured(env) ? connected : available).push(line(zoomConfigured(env), "Zoom — зустрічі в Zoom"));
+  const bitrix = bitrixConfigured(env);
+  const zoom = zoomConfigured(env);
+  const name = user.full_name ? `<b>${esc(user.full_name)}</b>` : "<b>Власник</b>";
+  const mark = (ok: boolean) => (ok ? "✅" : "➕");
 
   const html = [
     "⚙️ <b>Налаштування</b>",
     "",
     `👤 ${name}${user.email ? `\n📧 ${esc(user.email)}` : ""}`,
     "",
-    "<b>Підключено</b>",
-    ...connected,
-    ...(available.length ? ["", "<b>Можна підключити</b>", ...available] : []),
-    "",
-    "<b>Сповіщення</b>",
-    `⏰ Нагадування: ${marksText(marks)}`,
-    ...(gmail ? [`📧 Нова пошта в бот: ${(await mailNotices(env)) ? "так" : "ні"}`] : []),
-    `☀️ Ранковий звіт: ${digest ? `щодня о ${timeText((await loadDigestChoice(env)).time)}` : "вимкнено"}`,
-    "🔔 Нові запрошення, зміни в календарі й відповіді гостей — одразу",
+    "<b>Підключення</b> — натисніть, щоб налаштувати:",
+    `${mark(google)} Google — календар, пошта${drive ? ", Диск, Таблиці й Документи" : ""}${google && !drive ? " (Диск — перепідключіть з усіма галочками)" : ""}`,
+    `${mark(bitrix)} Bitrix24 — задачі`,
+    `${mark(zoom)} Zoom — зустрічі в Zoom (необовʼязково)`,
+    ...(google
+      ? [
+          "",
+          "<b>Сповіщення</b>",
+          `⏰ Нагадування: ${marksText(marks)}${marks.length && !awake ? " — ⚠️ ще не налаштовані" : ""}`,
+          `☀️ Ранковий звіт: ${digest ? `щодня о ${timeText((await loadDigestChoice(env)).time)}` : "вимкнено"}`,
+          ...(gmail ? [`📧 Нова пошта в бот: ${(await mailNotices(env)) ? "так" : "ні"}`] : []),
+        ]
+      : ["", "<i>Почніть з Google: без нього календар, пошта й нагадування не працюють.</i>"]),
   ].join("\n");
 
-  const keyboard: InlineKeyboard = [];
+  const keyboard: InlineKeyboard = [
+    [
+      { text: `${mark(google)} Google`, callback_data: "set:tab:google" },
+      { text: `${mark(bitrix)} Bitrix24`, callback_data: "set:tab:bitrix" },
+      { text: `${mark(zoom)} Zoom`, callback_data: "set:tab:zoom" },
+    ],
+  ];
   if (google) {
     keyboard.push([
       { text: "⏰ Нагадування", callback_data: "set:rem" },
       { text: "☀️ Ранковий звіт", callback_data: "set:dg" },
     ]);
     keyboard.push([
-      ...(gmail ? [{ text: `📧 Нова пошта в бот: ${(await mailNotices(env)) ? "✅" : "❌"}`, callback_data: "set:mail" }] : []),
+      ...(gmail ? [{ text: `📧 Пошта в бот: ${(await mailNotices(env)) ? "✅" : "❌"}`, callback_data: "set:mail" }] : []),
       { text: "🧠 Памʼять", callback_data: "set:mem" },
     ]);
   }
-  keyboard.push([{ text: google ? "🔄 Перепідключити Google" : "🔗 Підключити Google", url: await connectLink(env) }]);
-  keyboard.push([{ text: "📖 Інструкції: Google, Telegram, Bitrix24", callback_data: "guide:menu" }]);
-  // Bitrix24 and Zoom: connected right here (the bot asks for the key); set by a deployment variable — nothing to do.
-  const integrationButtons = (["bitrix", "zoom"] as Integration[]).flatMap((w) => {
-    const source = integrationSource(env, w);
-    if (source === "variable") return [];
-    return source === "settings"
-      ? [{ text: `❌ Відключити ${INTEGRATION_NAMES[w]}`, callback_data: `set:off:${w}` }]
-      : [{ text: `🔗 Підключити ${INTEGRATION_NAMES[w]}`, callback_data: `set:on:${w}` }];
-  });
-  if (integrationButtons.length) keyboard.push(integrationButtons);
+  keyboard.push([{ text: "💡 Що я вмію", callback_data: "tour" }]);
   // Only for an own Pub/Sub topic (GMAIL_PUBSUB_TOPIC); otherwise the bot sets the push up itself.
   if (env.GMAIL_PUBSUB_TOPIC && gmail) keyboard.push([{ text: "📧 Адреса для сповіщень про листи", callback_data: "set:mailpush" }]);
   return { html, keyboard };
@@ -283,6 +274,11 @@ export async function handleSettingsButton(env: Env, user: User, data: string, c
   if (data === "set:back") {
     await answer();
     return show(await mainView(env, user));
+  }
+  const tab = /^set:tab:(google|bitrix|zoom)$/.exec(data);
+  if (tab) {
+    await answer();
+    return show(await tabView(env, tab[1] as Tab));
   }
   if (!(await hasGoogleAuth(env))) {
     await answer("Спершу підключіть Google");

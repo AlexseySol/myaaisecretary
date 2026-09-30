@@ -15,10 +15,9 @@ export async function announceUpdate(env: Env): Promise<boolean> {
   const grant = await loadGrant(env).catch(() => null);
   const seen = settings.v;
   // A new owner (nothing set up yet) gets the greeting, not a list of changes.
-  if (seen === undefined && !grant) {
-    await saveOwnerSettings(env, { ...settings, v: CURRENT_VERSION });
-    return false;
-  }
+  // It starts at the current version when its pinned message is first written (oauth.ts writeVault) — so no message
+  // appears in the chat just for this.
+  if (seen === undefined && !grant) return false;
 
   const releases = RELEASES.filter((r) => r.v > (seen ?? 0)).slice(0, 3);
   const added = releases.flatMap((r) => r.added ?? []);

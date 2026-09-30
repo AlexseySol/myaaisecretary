@@ -1,5 +1,6 @@
 import { ConfigError, type Env, parseGoogleClient } from "../env";
-import { connectLink, loadIntegrations, saveIntegrations } from "../google/oauth";
+import { loadIntegrations, saveIntegrations } from "../google/oauth";
+import { sendTab } from "./tabs";
 import { applyIntegrations, integrationSource } from "../integrations";
 import { esc, Telegram } from "../telegram/api";
 import type { TgMessage } from "../telegram/types";
@@ -12,28 +13,9 @@ import type { TgMessage } from "../telegram/types";
 
 const api = (id: string) => `https://console.cloud.google.com/apis/library/${id}`;
 
-/** What to do in Google Cloud to get the file, and where to send it. */
+/** What to do in Google Cloud to get the file, and where to send it: the Google tab. */
 export async function askGoogleClient(env: Env, chatId: number): Promise<void> {
-  const tg = new Telegram(env);
-  if (integrationSource(env, "google") === "variable") {
-    await tg.send(chatId, "Google-клієнт уже заданий у налаштуваннях Vercel.", { keyboard: [[{ text: "🔗 Підключити Google", url: await connectLink(env) }]] });
-    return;
-  }
-  await tg.send(
-    chatId,
-    [
-      "🔑 <b>Підключення Google — крок 1 із 2: файл Google-клієнта</b>",
-      "",
-      `1. <a href="https://console.cloud.google.com/projectcreate">Створіть проєкт</a> у Google Cloud (будь-яка назва).`,
-      `2. Увімкніть API (кожне — <b>Enable</b>): <a href="${api("calendar-json.googleapis.com")}">Calendar</a>, <a href="${api("gmail.googleapis.com")}">Gmail</a>, <a href="${api("drive.googleapis.com")}">Drive</a>, <a href="${api("sheets.googleapis.com")}">Sheets</a>, <a href="${api("docs.googleapis.com")}">Docs</a>, <a href="${api("pubsub.googleapis.com")}">Cloud Pub/Sub</a>.`,
-      `3. <a href="https://console.cloud.google.com/auth/overview">Google Auth Platform</a> → Get started: назва AI-secretary, ваша пошта; Audience — Internal (акаунт компанії) або External (Gmail), для External потім <b>Publish app</b>.`,
-      `4. <a href="https://console.cloud.google.com/auth/clients">Clients</a> → <b>Create client</b> → тип <b>Desktop app</b> → Create → <b>Download JSON</b>.`,
-      "",
-      "📎 <b>Надішліть цей файл</b> (<code>client_secret_….json</code>) сюди, у чат. Я перевірю його, збережу зашифрованим і видалю з чату.",
-      "",
-      "<i>Докладніше з відео — /help → 📖 Google.</i>",
-    ].join("\n"),
-  );
+  await sendTab(env, chatId, "google");
 }
 
 /** The JSON text of a message: a sent .json file or pasted text. Null when it is neither. */
@@ -75,13 +57,13 @@ export async function handleGoogleClientFile(env: Env, msg: TgMessage): Promise<
     google: { i: client.GOOGLE_CLIENT_ID, s: client.GOOGLE_CLIENT_SECRET, ...(client.GOOGLE_PROJECT_ID ? { p: client.GOOGLE_PROJECT_ID } : {}), d: client.GOOGLE_OAUTH_MODE === "desktop" },
   });
   await applyIntegrations(env);
-  const web = client.GOOGLE_OAUTH_MODE === "web";
-  await tg.send(
-    msg.chat.id,
-    `✅ <b>Файл Google-клієнта збережено</b>${client.GOOGLE_PROJECT_ID ? ` (проєкт ${esc(client.GOOGLE_PROJECT_ID)})` : ""}.\n\n` +
-      "<b>Крок 2 із 2:</b> натисніть кнопку, увійдіть у Google і на екрані з дозволами поставте <b>«Вибрати все»</b>." +
-      (web ? `\n\n⚠️ Це клієнт типу «Web application»: у ньому має бути redirect URI <code>${esc(env.PUBLIC_URL)}/api/oauth/callback</code>. Простіше — створити клієнт типу <b>Desktop app</b>.` : ""),
-    { keyboard: [[{ text: "🔗 Підключити Google", url: await connectLink(env) }]] },
-  );
+  if (client.GOOGLE_OAUTH_MODE === "web") {
+    await tg.send(
+      msg.chat.id,
+      `⚠️ Це клієнт типу «Web application»: у ньому має бути redirect URI <code>${esc(env.PUBLIC_URL)}/api/oauth/callback</code>. Простіше — створити клієнт типу <b>Desktop app</b>.`,
+    );
+  }
+  // Step 2: the same Google tab, now with «Увійти в Google».
+  await sendTab(env, msg.chat.id, "google");
   return true;
 }

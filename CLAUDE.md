@@ -48,7 +48,9 @@ webhook and redirects to the bot; `/api/health` shows the state.
   name in any case form / alphabet), `report.ts` (Excel: tasks, stage, status, state from comments by AI, analytics),
   `menu.ts` (/bitrix buttons `bx:…`, no AI; «📊 Excel-звіт» first asks what to export, `REPORT_SCOPES`). The `bitrix_agent` (`agent/bitrixTools.ts`, `bitrixPrompt`) joins the
   Supervisor and `route.ts` when it is configured. `lib/xlsx.ts` writes .xlsx without dependencies.
-- `src/bot/` — `onboarding.ts` (/start, /help), `settings.ts` (/settings: what is connected, reminder times and the
+- `src/bot/` — `onboarding.ts` (/start: first the tour «Що я вмію» with «⚙️ Налаштувати», nothing pinned yet; /help),
+  `tabs.ts` (/settings tabs 🔗 Google / 📋 Bitrix24 / 🎥 Zoom: the step the owner is on — Google: 1) the client file,
+  2) «Увійти в Google» — with the video and the one button that step needs), `settings.ts` (/settings: what is connected, reminder times and the
   morning list chosen with `set:…` buttons, no AI), `owner.ts` (profile from Telegram/Google/env),
   `contacts.ts` (names → emails from calendar attendees), `guides.ts` («📖 Інструкції» in /help and /settings: Google
   APIs and setup, Telegram, Bitrix24; the owner adds a video by replying to a guide with it, kept in `OwnerSettings.gv`). Commands: /start /settings /bitrix /reset /help; everything else

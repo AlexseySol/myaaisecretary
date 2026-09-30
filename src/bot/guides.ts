@@ -122,22 +122,37 @@ export async function showGuideMenu(env: Env, chatId: number): Promise<void> {
   await new Telegram(env).send(chatId, "📖 <b>Інструкції</b>\n\nОберіть, що налаштувати:", { keyboard: GUIDE_MENU });
 }
 
+/** The video for a guide: the owner's own (a file or a link), else the project's. */
+export async function guideVideo(env: Env, w: Guide): Promise<GuideVideo> {
+  return ((await loadOwnerSettings(env).catch((): OwnerSettings => ({}))).gv ?? {})[w] ?? { u: DEFAULT_VIDEOS[w] };
+}
+
+/** «🎥 Відео: Гугл» — the video as a link named like it, first in a guide ("" for a video file). */
+export function videoLine(w: Guide, video: GuideVideo): string {
+  return video.u ? `🎥 <b>Відео:</b> ${link(video.u, video.u === DEFAULT_VIDEOS[w] ? VIDEO_TITLES[w] : "дивитися")}\n\n` : "";
+}
+
+/** A video file the owner added, sent before the guide. */
+export async function sendVideoFile(env: Env, chatId: number, w: Guide, video: GuideVideo): Promise<void> {
+  if (!video.f) return;
+  const method = video.t === "animation" ? "sendAnimation" : video.t === "document" ? "sendDocument" : "sendVideo";
+  const field = video.t === "animation" ? "animation" : video.t === "document" ? "document" : "video";
+  await new Telegram(env).call(method, { chat_id: chatId, [field]: video.f, caption: `▶️ Відео: ${GUIDES[w]}` }).catch(() => undefined);
+}
+
+/** The hidden mark that lets the owner reply to a guide with a video. */
+export const guideRef = (w: Guide) => hiddenData({ k: "guide", w } satisfies GuideRef);
+
 /** Sends a guide: its video first (when the owner added one), then the steps. */
 export async function showGuide(env: Env, chatId: number, w: Guide): Promise<void> {
   const tg = new Telegram(env);
-  const video: GuideVideo = ((await loadOwnerSettings(env).catch((): OwnerSettings => ({}))).gv ?? {})[w] ?? { u: DEFAULT_VIDEOS[w] };
-  if (video?.f) {
-    const method = video.t === "animation" ? "sendAnimation" : video.t === "document" ? "sendDocument" : "sendVideo";
-    const field = video.t === "animation" ? "animation" : video.t === "document" ? "document" : "video";
-    await tg.call(method, { chat_id: chatId, [field]: video.f, caption: `▶️ Відео: ${GUIDES[w]}` }).catch(() => undefined);
-  }
+  const video = await guideVideo(env, w);
+  await sendVideoFile(env, chatId, w, video);
   const keyboard: InlineKeyboard = [];
-  // The video right in the guide, as a link named like the video.
-  const videoLine = video.u ? `🎥 <b>Відео:</b> ${link(video.u, video.u === DEFAULT_VIDEOS[w] ? VIDEO_TITLES[w] : "дивитися")}\n\n` : "";
   if (w === "bitrix" && !bitrixConfigured(env) && integrationSource(env, "bitrix") !== "variable") {
     keyboard.push([{ text: "🔗 Підключити Bitrix24", callback_data: "set:on:bitrix" }]);
   }
-  await tg.send(chatId, hiddenData({ k: "guide", w } satisfies GuideRef) + videoLine + TEXT[w](env), keyboard.length ? { keyboard } : {});
+  await tg.send(chatId, guideRef(w) + videoLine(w, video) + TEXT[w](env), keyboard.length ? { keyboard } : {});
 }
 
 /**

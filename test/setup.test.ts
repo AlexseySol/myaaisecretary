@@ -137,7 +137,8 @@ describe("optional features", () => {
     expect(await loadIntegrations(env)).toMatchObject({ google: { i: "123-abc.apps.googleusercontent.com", s: "GOCSPX-secret", p: "my-proj", d: true } });
     expect(tgCalls(calls, "deleteMessage").some((c) => c.message_id === 4)).toBe(true);
     const done = tgCalls(calls, "sendMessage").at(-1)!;
-    expect(String(done.text)).toContain("Файл Google-клієнта збережено");
+    expect(String(done.text)).toContain("крок 2 із 2");
+    expect(String(done.text)).toContain("Файл Google-клієнта є (проєкт my-proj)");
     expect(JSON.stringify(done.reply_markup)).toContain("/api/oauth/start?state=");
     // Applied for every update: the deployment itself has no Google variables.
     expect(env.GOOGLE_CLIENT_ID).toBe("123-abc.apps.googleusercontent.com");

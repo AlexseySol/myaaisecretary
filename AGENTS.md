@@ -74,8 +74,8 @@ Talk in the user's language. No explanations of internals, no tables of alternat
 ✅ Вебхук Telegram зарегистрирован
 
 Не реализовано:
-❌ Google не подключён — напишите боту /start: он подскажет, где взять файл Google-клиента, примет его
-   и даст кнопку «Подключить Google»
+❌ Google не подключён — напишите боту /start → «⚙️ Налаштувати» → «🔗 Google»: там шаги с видео,
+   бот примет файл Google-клиента и даст кнопку «Увійти в Google»
 ```
 
 A line goes into "Не реализовано" only as `❌ <what> — <one action the user must take>`.

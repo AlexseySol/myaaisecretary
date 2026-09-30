@@ -1,35 +1,46 @@
-import { type Env, googleConfigured } from "../env";
-import { askGoogleClient } from "./googleClient";
-import { connectLink, hasGoogleAuth } from "../google/oauth";
+import type { Env } from "../env";
+import { sendTab } from "./tabs";
+import { hasGoogleAuth } from "../google/oauth";
 import { esc, Telegram } from "../telegram/api";
 import { refreshCommands } from "./commands";
 import type { User } from "./owner";
 
+/** «Підключити Google» anywhere: the Google tab, at the step the owner is on. */
 export async function sendConnectGoogle(env: Env): Promise<void> {
-  // No Google client yet: first the file from Google Cloud.
-  if (!googleConfigured(env)) return askGoogleClient(env, env.OWNER_TELEGRAM_ID);
-  await new Telegram(env).send(
-    env.OWNER_TELEGRAM_ID,
-    "Підключіть <b>Google</b> — календар і пошту. Я створюватиму події від вашого імені, а Google сам повідомлятиме " +
-      "мене про зміни в календарі.",
-    { keyboard: [[{ text: "🔗 Підключити Google", url: await connectLink(env) }]] },
-  );
+  await sendTab(env, env.OWNER_TELEGRAM_ID, "google");
 }
 
-/** /start — no questionnaire: the profile comes from Telegram and Google. */
+/** What the bot can do and how to work with it — the first thing a new owner sees (and «💡 Що я вмію»). */
+export function tourText(name?: string | null): string {
+  return [
+    name ? `👋 Вітаю, ${esc(name)}! Я ваш AI-секретар.` : "👋 Вітаю! Я ваш AI-секретар.",
+    "",
+    "<b>Що я вмію</b>",
+    "📅 <b>Календар</b> — ставлю зустрічі з Google Meet чи Zoom, показую розклад і вільний час, переношу й скасовую; про нові запрошення й зміни пишу одразу, з кнопками ✅ / ❌.",
+    "📧 <b>Пошта</b> — шукаю, читаю, пишу й відповідаю на листи; про нові листи повідомляю одразу.",
+    "📁 <b>Документи</b> — знаходжу й читаю файли на Google Диску, веду таблиці й документи, читаю PDF, Word, Excel.",
+    "📋 <b>Задачі Bitrix24</b> — показую, аналізую, ставлю задачі людям за імʼям, роблю Excel-звіт.",
+    "⏰ <b>Нагадування</b> перед зустрічами й ☀️ <b>ранковий звіт</b> — у ваш час.",
+    "",
+    "<b>Як зі мною працювати</b>",
+    "• Пишіть як людині — текстом, голосовим, скріншотом або пересилайте переписку.",
+    "• Відповідайте (reply) на моє повідомлення про зустріч, лист чи задачу — я зрозумію, про що мова.",
+    "• Якщо я щось питаю — просто відповідайте, я продовжу ту саму дію.",
+    "• Лист, коментар чи нову задачу надсилаю лише після вашого «так». Нічого не видаляю без прямого прохання.",
+    "",
+    "<b>З чого почати:</b> ⚙️ Налаштування → 🔗 Google (2 кроки, ~5 хвилин, є відео).",
+  ].join("\n");
+}
+
+/** /start — first what the bot can do; then the settings, where each connection is its own tab. */
 export async function startOnboarding(env: Env, user: User): Promise<void> {
   const tg = new Telegram(env);
   await refreshCommands(env);
-  const hello = user.full_name ? `👋 Вітаю, ${esc(user.full_name)}!` : "👋 Вітаю!";
   if (!(await hasGoogleAuth(env))) {
-    await tg.send(
-      user.tg_id,
-      `${hello} Я ваш AI-секретар: створюю зустрічі з тексту, голосового, пересланої переписки чи скріншота, ` +
-        "надсилаю інвайти, повідомляю про зміни в календарі й працюю з поштою.",
-    );
-    await sendConnectGoogle(env);
+    await tg.send(user.tg_id, tourText(user.full_name), { keyboard: [[{ text: "⚙️ Налаштувати", callback_data: "set:open" }]], removeKeyboard: false });
     return;
   }
+  const hello = user.full_name ? `👋 Вітаю, ${esc(user.full_name)}!` : "👋 Вітаю!";
   await tg.send(user.tg_id, `${hello}\n\n${helpText()}`, { removeKeyboard: true });
 }
 

@@ -75,8 +75,9 @@ If a check fails: say which item is wrong and why, and ask for that item only.
 
 ## Step 4 — the owner connects Google in the bot (their action, tell them exactly this)
 
-1. Write `/start` to @<bot>. The bot shows what to do in Google Cloud (a project, the APIs, a **Desktop app** client)
-   and asks for the downloaded file `client_secret_….json` — send the file to the bot.
+1. Write `/start` to @<bot>: it shows what it can do → «⚙️ Налаштувати» → tab «🔗 Google». The tab shows what to do in
+   Google Cloud (a project, the APIs, a **Desktop app** client, with a video) and asks for the downloaded file
+   `client_secret_….json` — send the file to the bot.
 2. Press «Підключити Google», choose the account and on the permissions screen press «Вибрати все».
 3. Google says "app isn't verified" → «Додатково» → «Перейти»: it is their own bot.
 4. The browser opens `http://127.0.0.1…` with an error page. That is expected: copy that address and send it to the bot.

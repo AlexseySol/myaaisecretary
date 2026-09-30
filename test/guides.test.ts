@@ -12,34 +12,36 @@ const press = (data: string): TgUpdate => ({ update_id: 1, callback_query: { id:
 const say = (text: string): TgUpdate => ({ update_id: 2, message: { message_id: 6, date: 0, chat: { id: OWNER, type: "private" }, from, text } });
 
 describe("📖 guides inside the bot", () => {
-  it("/help offers Google, Telegram and Bitrix24; the Google guide lists the 6 APIs, linked to the owner's project", async () => {
+  it("/help offers Google, Telegram and Bitrix24; the Google tab (no client yet) lists the 6 APIs and asks for the file", async () => {
     const calls = mockFetch([]);
-    const { env } = testEnv({ GOOGLE_PROJECT_ID: "my-proj" });
+    const { env } = testEnv({ GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "" });
     await handleUpdate(env, say("/help"));
     const help = tgCalls(calls, "sendMessage").at(-1)!;
     expect(JSON.stringify(help.reply_markup)).toContain("guide:google");
     expect(JSON.stringify(help.reply_markup)).toContain("guide:bitrix");
 
     await handleUpdate(env, press("guide:google"));
-    const text = String(lastBotMessage("Google: що увімкнути").text);
-    for (const api of ["Google Calendar API", "Gmail API", "Google Drive API", "Google Sheets API", "Google Docs API", "Cloud Pub/Sub API"]) expect(text).toContain(api);
     const sent = String(tgCalls(calls, "sendMessage").at(-1)!.text);
-    expect(sent).toContain("pubsub.googleapis.com?project=my-proj");
+    expect(sent).toContain("крок 1 із 2");
+    for (const api of ["calendar-json", "gmail", "drive", "sheets", "docs", "pubsub"]) expect(sent).toContain(`apis/library/${api}.googleapis.com`);
     expect(sent).toContain("Desktop app");
+    expect(sent).toContain("Надішліть цей файл");
     // The project's video comes with it until the owner adds their own.
     expect(sent).toContain('🎥 <b>Відео:</b> <a href="https://drive.google.com/file/d/1o1UOKdoZSm1j-d3cSjSd4-tVVB0HjeGh/view">Гугл</a>');
 
     await handleUpdate(env, press("guide:telegram"));
     expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("@BotFather");
     await handleUpdate(env, press("guide:bitrix"));
-    expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("Вхідний вебхук");
+    const bitrix = tgCalls(calls, "sendMessage").at(-1)!;
+    expect(String(bitrix.text)).toContain("Вхідний вебхук");
+    expect(JSON.stringify(bitrix.reply_markup)).toContain("set:on:bitrix");
   });
 
   it("a video sent in reply to a guide is kept and shown with it from then on", async () => {
     const calls = mockFetch([]);
     const { env } = testEnv();
     await handleUpdate(env, press("guide:google"));
-    const guide = lastBotMessage("Google: що увімкнути");
+    const guide = lastBotMessage("Google —");
     await handleUpdate(env, {
       update_id: 3,
       message: { message_id: 7, date: 0, chat: { id: OWNER, type: "private" }, from, reply_to_message: guide, video: { file_id: "VID1", file_unique_id: "u" } },
