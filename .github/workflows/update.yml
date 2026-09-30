@@ -1,0 +1,43 @@
+name: Update from Mem341/AI-secretary
+
+# Runs only in a copy of the bot, the GitHub repository that Vercel's «Deploy» button (or a deploying agent) created
+# and connected to Vercel. Every hour it takes the new version of main of github.com/Mem341/AI-secretary and commits
+# it here, but only once its checks have passed. Vercel builds every push to this copy by itself, and the bot then says
+# «🆕 Бот оновлено».
+# No token and no secret are involved: the job uses its own GITHUB_TOKEN. The .github folder stays as it is, because a
+# job's token cannot change workflows.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: update
+
+jobs:
+  update:
+    if: github.repository != 'Mem341/AI-secretary'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Take the new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          git fetch --depth=1 https://github.com/Mem341/AI-secretary.git main
+          sha=$(git rev-parse FETCH_HEAD)
+          runs=$(curl -fsS -H "authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/Mem341/AI-secretary/commits/$sha/check-runs") || { echo "GitHub did not answer — next hour"; exit 0; }
+          if echo "$runs" | jq -e '[.check_runs[] | select(.status != "completed" or ((.conclusion // "") | IN("success","skipped","neutral") | not))] | length > 0' > /dev/null; then
+            echo "The new version's checks are not green yet — next hour"; exit 0
+          fi
+          # The source's files, except workflows: changed, added and deleted ones alike.
+          git restore --source=FETCH_HEAD --staged --worktree -- . ':(exclude).github'
+          if git diff --cached --quiet; then echo "Up to date"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "Update from Mem341/AI-secretary ${sha:0:7}"
+          git push
+          echo "Updated to ${sha:0:7}: Vercel deploys it now"

@@ -118,6 +118,8 @@ webhook and redirects to the bot; `/api/health` shows the state.
 - Every change the owner would notice gets a release in `src/changelog.ts` (next number, newest first, plain words):
   after the deploy the bot tells the owner once what was added/changed (`bot/news.ts`, the last seen number is
   `OwnerSettings.v`) and checks live whether the owner must do something (reconnect Google, the reminders check).
+- Updates: a deployed copy is the owner's GitHub copy connected to Vercel; its `.github/workflows/update.yml` (skipped in
+  Mem341/AI-secretary itself) takes the new `main` hourly once its checks pass — no token, no secret; keep it that way.
 - Deploys: `.github/workflows/ci.yml` runs typecheck and tests, then — with the ONE repository secret `VERCEL_DEPLOY`,
   a line per bot «<Vercel token> <project name> <bot address>» — uploads the code with the Vercel CLI to each project
   (nothing to set up on Vercel's side, no Git connection) and opens each bot's `/api/setup` to wake it. Never put a

@@ -56,10 +56,16 @@ If a check fails: say which item is wrong and why, and ask for that item only.
 
 ## Step 3 — project, variables, deploy
 
-1. **Project.** Framework preset **Other**, no build command, root `/`, name `ai-secretary`.
-   - Vercel cannot reach the GitHub repo (`repo_no_access`)? Do not ask. Clone `main` and deploy from files:
-     `npx vercel link --yes --project ai-secretary`, then the variables, then `npx vercel deploy --prod --yes`.
-   - Ask for a Vercel token only if the CLI is not logged in.
+1. **Project — the user's own GitHub copy, connected to Vercel.** That is what makes the bot update itself: the copy
+   has `.github/workflows/update.yml` (every hour it takes the new `main` of github.com/Mem341/AI-secretary once its
+   checks pass; Vercel builds every push). No token or secret for it.
+   - Simplest: the Vercel clone link from `AGENTS.md` §3 — Vercel creates the copy in the user's GitHub and the project
+     itself (preset **Other**, no build command, root `/`), and asks for the three variables.
+   - With `gh`/GitHub access: create the copy in the user's account (all files of `main`, including `.github`), then
+     import it in Vercel (`npx vercel link` + `npx vercel git connect`).
+   - No GitHub possible (`repo_no_access`, no account)? Do not ask. Deploy from files — the bot works but does not
+     update itself; put that in the report: `npx vercel link --yes --project ai-secretary`, the variables,
+     `npx vercel deploy --prod --yes`. Ask for a Vercel token only if the CLI is not logged in.
 2. **Production variables:**
    - `TELEGRAM_BOT_TOKEN`
    - `OWNER_TELEGRAM_ID`

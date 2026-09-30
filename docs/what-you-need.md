@@ -138,17 +138,12 @@ Drive. Голосові розпізнає той самий OpenRouter.
 | «Cloud Pub/Sub API вимкнено» | [увімкніть Cloud Pub/Sub API](https://console.cloud.google.com/apis/library/pubsub.googleapis.com) у проєкті Google-клієнта |
 | «403 access_denied … тестується» | [Audience](https://console.cloud.google.com/auth/audience) → **Publish app** |
 
-## Автодеплой: кожне оновлення виходить саме
+## Оновлення: бот оновлюється сам
 
-Нічого налаштовувати у Vercel не треба — лише один секрет у GitHub:
+Якщо бота розгорнуто кнопкою **Deploy** (або агентом) — у вашому GitHub є його копія, підключена до Vercel. У ній
+працює `.github/workflows/update.yml`: щогодини вона бере нову версію з github.com/Mem341/AI-secretary (лише коли її
+перевірки пройшли), Vercel сам її збирає, а бот пише «🆕 Бот оновлено». Ні токенів, ні секретів, нічого у Vercel.
+Оновити одразу: GitHub → ваша копія → **Actions → Update from Mem341/AI-secretary → Run workflow**.
 
-1. Vercel → аватар → **Account Settings → Tokens** → **Create** → скопіюйте токен (`vcp_…`).
-2. GitHub → цей репозиторій → **Settings → Secrets and variables → Actions → New repository secret**:
-   імʼя `VERCEL_DEPLOY`, значення — рядок на кожного бота: `токен назва-проєкту адреса-бота`, наприклад
-   ```
-   vcp_abc123 ai-secretary https://ai-secretary.vercel.app
-   vcp_abc123 ai-secretary-2 https://ai-secretary-2.vercel.app
-   ```
-
-Далі після кожного оновлення CI перевіряє код тестами, завантажує його в кожен проєкт Vercel і будить бота — він
-одразу пише «🆕 Бот оновлено». Токен лежить лише в секретах GitHub: у коді його немає.
+Кілька ботів з одного репозиторію без GitHub-копій: секрет `VERCEL_DEPLOY` у цьому репозиторії, рядок на кожного бота —
+`токен-Vercel назва-проєкту адреса-бота`; після кожного оновлення CI завантажує код у кожен проєкт і будить бота.
