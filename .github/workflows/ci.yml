@@ -27,20 +27,25 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      # Several bots from this repository: put one hook (and one bot address) per line in the same secret / variable.
       - name: Deploy to Vercel
         env:
-          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          HOOKS: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
-          if [ -z "$HOOK" ]; then echo "VERCEL_DEPLOY_HOOK is not set — skipping the deploy"; exit 0; fi
-          curl -fsS -X POST "$HOOK"
-      - name: Wait for the new version and wake the bot
+          if [ -z "$HOOKS" ]; then echo "VERCEL_DEPLOY_HOOK is not set — skipping the deploy"; exit 0; fi
+          n=0
+          for hook in $HOOKS; do n=$((n + 1)); if curl -fsS -o /dev/null -X POST "$hook"; then echo "deploy $n started"; else echo "deploy $n: the hook did not answer"; fi; done
+      - name: Wait for the new version and wake each bot
         env:
-          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
-          BOT_URL: ${{ vars.BOT_URL }}
+          HOOKS: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          BOTS: ${{ vars.BOT_URL }}
         run: |
-          if [ -z "$HOOK" ] || [ -z "$BOT_URL" ]; then echo "VERCEL_DEPLOY_HOOK or BOT_URL is not set — skipping"; exit 0; fi
-          for i in $(seq 1 24); do
-            sleep 15
-            if curl -fsS "$BOT_URL/api/health" | grep -q "\"commit\":\"$GITHUB_SHA\""; then echo "live after $((i * 15)) s"; break; fi
+          if [ -z "$HOOKS" ] || [ -z "$BOTS" ]; then echo "VERCEL_DEPLOY_HOOK or BOT_URL is not set — skipping"; exit 0; fi
+          for bot in $BOTS; do
+            bot="${bot%/}"
+            for i in $(seq 1 24); do
+              if curl -fsS "$bot/api/health" | grep -q "\"commit\":\"$GITHUB_SHA\""; then echo "$bot: live after $((i * 15)) s"; break; fi
+              sleep 15
+            done
+            curl -sS -o /dev/null -w "$bot wake: %{http_code}\n" "$bot/api/setup" || true
           done
-          curl -sS -o /dev/null -w "wake: %{http_code}\n" "$BOT_URL/api/setup" || true

@@ -118,6 +118,7 @@ webhook and redirects to the bot; `/api/health` shows the state.
 - Every change the owner would notice gets a release in `src/changelog.ts` (next number, newest first, plain words):
   after the deploy the bot tells the owner once what was added/changed (`bot/news.ts`, the last seen number is
   `OwnerSettings.v`) and checks live whether the owner must do something (reconnect Google, the reminders check).
-- Deploys: `.github/workflows/ci.yml` runs typecheck and tests, then (secret `VERCEL_DEPLOY_HOOK`, variable `BOT_URL`)
-  calls the Vercel Deploy Hook, waits until `/api/health` shows its commit and opens `/api/setup` to wake the bot.
+- Deploys: `.github/workflows/ci.yml` runs typecheck and tests, then (secret `VERCEL_DEPLOY_HOOK`, variable `BOT_URL` —
+  one per line for several bots/Vercel projects) calls each Deploy Hook, waits until each bot's `/api/health` shows its
+  commit and opens its `/api/setup` to wake it.
 - Check before pushing: `npm run typecheck && npm test` (tests mock all outbound HTTP; `test/helpers.ts` has a fake Telegram that keeps messages, entities and the pin).
