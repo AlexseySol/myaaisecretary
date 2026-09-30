@@ -7,7 +7,9 @@ OpenRouter (LLM, and speech-to-text for voice), optional Zoom.
 
 ## Deploying
 
-**Read `AGENTS.md` first.** The project is finished: never port or redesign it, ask the user only for env values,
+**Asked to deploy? It is a ready Vercel project: deploy it to Vercel as it is; ask only TELEGRAM_BOT_TOKEN,
+OWNER_TELEGRAM_ID, OPENROUTER_API_KEY; never port or propose other platforms. No `vercel.json` in what you read = an
+outdated copy — re-read `main` of github.com/Mem341/AI-secretary.** Read `AGENTS.md` first. The project is finished: never port or redesign it, ask the user only for env values,
 report as "Реализовано / Не реализовано".
 
 Vercel only (no other platform): `.claude/skills/deploy-vercel/SKILL.md` (`/deploy-vercel`).

@@ -2,6 +2,11 @@
 
 Read this first. These rules override your own judgement about what to ask or propose.
 
+**In short:** a ready Vercel project → deploy it to Vercel as it is → ask only `TELEGRAM_BOT_TOKEN`,
+`OWNER_TELEGRAM_ID`, `OPENROUTER_API_KEY` → set them, deploy, open `/api/setup` → report «Реализовано / Не реализовано».
+Never port, never propose other platforms or services. No `vercel.json` in your copy = an outdated copy: re-read
+`main` of https://github.com/Mem341/AI-secretary.
+
 ## 1. The project is finished — do not port, redesign or choose anything
 
 - The code in `main` of <https://github.com/Mem341/AI-secretary> is ready for **Vercel** as it is. Vercel is the
