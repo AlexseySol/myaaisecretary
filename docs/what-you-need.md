@@ -2,6 +2,11 @@
 
 Для розгортання потрібні **три речі**. Google підключається вже в самому боті.
 
+🎥 **Відео-інструкції:** [Telegram](https://drive.google.com/file/d/1YJVHDBX5czzyU7kQ6S38jnNlzopAKCW3/view) ·
+[Google](https://drive.google.com/file/d/1o1UOKdoZSm1j-d3cSjSd4-tVVB0HjeGh/view) ·
+[Bitrix24](https://drive.google.com/file/d/1B2s1FbKSfogaEgv4L7fSpiqF-AbX0nq7/view) (усі — [у папці](https://drive.google.com/drive/folders/1VwJAJykWX4eBCpYlny6cfiLFqd3ESBKL)).
+Ті самі відео є в боті: `/help` → 📖.
+
 | # | Що | Приклад | Де взяти |
 |---|----|---------|----------|
 | 1 | **Токен Telegram-бота** | `7412345678:AAH3k…` | [§1](#1-токен-telegram-бота) |

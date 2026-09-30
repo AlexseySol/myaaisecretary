@@ -27,6 +27,14 @@ interface GuideRef {
   w: Guide;
 }
 
+/** The project's video tutorials (Google Drive); the owner's own video, if added, is shown instead. */
+export const DEFAULT_VIDEOS: Record<Guide, string> = {
+  google: "https://drive.google.com/file/d/1o1UOKdoZSm1j-d3cSjSd4-tVVB0HjeGh/view",
+  telegram: "https://drive.google.com/file/d/1YJVHDBX5czzyU7kQ6S38jnNlzopAKCW3/view",
+  bitrix: "https://drive.google.com/file/d/1B2s1FbKSfogaEgv4L7fSpiqF-AbX0nq7/view",
+};
+export const VIDEOS_FOLDER = "https://drive.google.com/drive/folders/1VwJAJykWX4eBCpYlny6cfiLFqd3ESBKL";
+
 export const GUIDE_MENU: InlineKeyboard = [
   (Object.keys(GUIDES) as Guide[]).map((w) => ({ text: `📖 ${GUIDES[w]}`, callback_data: `guide:${w}` })),
 ];
@@ -115,7 +123,7 @@ export async function showGuideMenu(env: Env, chatId: number): Promise<void> {
 /** Sends a guide: its video first (when the owner added one), then the steps. */
 export async function showGuide(env: Env, chatId: number, w: Guide): Promise<void> {
   const tg = new Telegram(env);
-  const video = ((await loadOwnerSettings(env).catch((): OwnerSettings => ({}))).gv ?? {})[w];
+  const video: GuideVideo = ((await loadOwnerSettings(env).catch((): OwnerSettings => ({}))).gv ?? {})[w] ?? { u: DEFAULT_VIDEOS[w] };
   if (video?.f) {
     const method = video.t === "animation" ? "sendAnimation" : video.t === "document" ? "sendDocument" : "sendVideo";
     const field = video.t === "animation" ? "animation" : video.t === "document" ? "document" : "video";
@@ -126,8 +134,7 @@ export async function showGuide(env: Env, chatId: number, w: Guide): Promise<voi
   if (w === "bitrix" && !bitrixConfigured(env) && integrationSource(env, "bitrix") !== "variable") {
     keyboard.push([{ text: "🔗 Підключити Bitrix24", callback_data: "set:on:bitrix" }]);
   }
-  const hint = video?.f || video?.u ? "" : "\n\n<i>Щоб додати відео до цієї інструкції — надішліть його (або посилання) у відповідь на це повідомлення.</i>";
-  await tg.send(chatId, hiddenData({ k: "guide", w } satisfies GuideRef) + TEXT[w](env) + hint, keyboard.length ? { keyboard } : {});
+  await tg.send(chatId, hiddenData({ k: "guide", w } satisfies GuideRef) + TEXT[w](env), keyboard.length ? { keyboard } : {});
 }
 
 /**
