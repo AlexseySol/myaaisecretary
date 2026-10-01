@@ -9,7 +9,7 @@ OpenRouter (LLM, and speech-to-text for voice), optional Zoom.
 
 **Asked to deploy? It is a ready Vercel project: deploy it to Vercel as it is; ask only TELEGRAM_BOT_TOKEN,
 OWNER_TELEGRAM_ID, OPENROUTER_API_KEY; never port or propose other platforms. No `vercel.json` in what you read = an
-outdated copy — re-read `main` of github.com/Mem341/AI-secretary.** Read `AGENTS.md` first. The project is finished: never port or redesign it, ask the user only for env values,
+outdated copy — re-read `main` of github.com/Mem341/aisecretary.** Read `AGENTS.md` first. The project is finished: never port or redesign it, ask the user only for env values,
 report as "Реализовано / Не реализовано".
 
 Vercel only (no other platform): `.claude/skills/deploy-vercel/SKILL.md` (`/deploy-vercel`).
@@ -128,7 +128,7 @@ webhook and redirects to the bot; `/api/health` shows the state.
   after the deploy the bot tells the owner once what was added/changed (`bot/news.ts`, the last seen number is
   `OwnerSettings.v`) and checks live whether the owner must do something (reconnect Google, the reminders check).
 - Updates: a deployed copy is the owner's GitHub copy connected to Vercel; its `.github/workflows/update.yml` (skipped in
-  Mem341/AI-secretary itself) takes the new `main` hourly once its checks pass — no token, no secret; keep it that way.
+  Mem341/aisecretary itself) takes the new `main` hourly once its checks pass — no token, no secret; keep it that way.
   `.github/workflows/wake.yml` opens the bot's `/api/setup` the moment Vercel reports a successful production deploy
   (`deployment_status`), so «🆕 Бот оновлено» comes at once: it derives the production address from the deploy's own
   («<project>-<team>.vercel.app», «<project>.vercel.app», or the repo variable `BOT_URL`) and wakes only the one whose

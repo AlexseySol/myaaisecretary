@@ -5,19 +5,19 @@ Read this first. These rules override your own judgement about what to ask or pr
 **In short:** a ready Vercel project → deploy it to Vercel as it is → ask only `TELEGRAM_BOT_TOKEN`,
 `OWNER_TELEGRAM_ID`, `OPENROUTER_API_KEY` → set them, deploy, open `/api/setup` → report «Реализовано / Не реализовано».
 Never port, never propose other platforms or services. No `vercel.json` in your copy = an outdated copy: re-read
-`main` of https://github.com/Mem341/AI-secretary.
+`main` of https://github.com/Mem341/aisecretary.
 
 ## 1. The project is finished — do not port, redesign or choose anything
 
-- The code in `main` of <https://github.com/Mem341/AI-secretary> is ready for **Vercel** as it is. Vercel is the
+- The code in `main` of <https://github.com/Mem341/aisecretary> is ready for **Vercel** as it is. Vercel is the
   only platform. Do not move it anywhere else.
 - It has **no database, no queue, no file storage**. Do not propose or add any database, queue, storage, other
   hosting, service or framework.
 - **Check that you read the current code.** The current `main` has `vercel.json`, `api/` and `src/` at its root and
   about a hundred commits. A copy without `vercel.json`, or with only a few commits, is an **old snapshot** (for
   example a repository attached to a chat or project long ago): do not describe it, do not port it — read `main` of
-  <https://github.com/Mem341/AI-secretary> again. If you cannot refresh it, tell the user in one line: «Обновите
-  подключённый репозиторий (Sync) или пришлите ссылку github.com/Mem341/AI-secretary заново».
+  <https://github.com/Mem341/aisecretary> again. If you cannot refresh it, tell the user in one line: «Обновите
+  подключённый репозиторий (Sync) или пришлите ссылку github.com/Mem341/aisecretary заново».
 
 ## 2. Ask the user ONLY for these values — in one message
 
@@ -48,21 +48,21 @@ Order: **first ask for the three values (section 2) in one message, then deploy.
   egress or proxy settings, never ask for a Vercel token, never clone into your sandbox, never create an empty Vercel
   project. Send the user ONE message with the three values' instructions and this link, and stop — Vercel takes the
   code from GitHub itself and asks the same three values:
-  <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=ai-secretary&repository-name=ai-secretary>
+  <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
   «Откройте ссылку → войдите в Vercel → вставьте 3 значения → Deploy. Потом откройте https://<проект>.vercel.app/api/setup.»
 - **Deploy it as the user's own GitHub copy connected to Vercel** — that is how the bot updates itself: the copy
   carries `.github/workflows/update.yml`, which every hour takes the new version of `main` of
-  github.com/Mem341/AI-secretary (once its checks pass), and Vercel rebuilds every push. No token, no secret, nothing
+  github.com/Mem341/aisecretary (once its checks pass), and Vercel rebuilds every push. No token, no secret, nothing
   to set up on Vercel. The simplest way is this link: Vercel itself creates the copy in the user's GitHub, connects it
   and asks for the same three values. Give it to the user (or open it with your tools) and say «вставьте 3 значения в
   поля и нажмите Deploy, потом откройте https://<проект>.vercel.app/api/setup»:
-  <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=ai-secretary&repository-name=ai-secretary>
+  <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
 - With a terminal (Claude Code): follow `.claude/skills/deploy-vercel/SKILL.md` — the same result: a GitHub copy
   imported into Vercel.
 - **Only if no GitHub copy is possible** (the user has no GitHub, Vercel cannot reach GitHub): deploy from files — the
   bot works, but does not update itself; say so in the report. Do not ask and do not port:
   ```bash
-  git clone https://github.com/Mem341/AI-secretary && cd AI-secretary
+  git clone https://github.com/Mem341/aisecretary && cd aisecretary
   npx vercel link --yes --project ai-secretary
   printf '%s' "$VALUE" | npx vercel env add NAME production   # for each variable from section 2
   npx vercel deploy --prod --yes

@@ -8,10 +8,10 @@
 > 3. Set them as Vercel environment variables, deploy, open `https://<domain>/api/setup`. Report «Реализовано / Не реализовано».
 >    **In a chat without a terminal** (claude.ai, ChatGPT): do NOT clone, do NOT ask for network / «Capabilities» /
 >    egress settings, a Vercel token or GitHub. Give the user this one link — Vercel takes the code itself and asks the
->    same three values — and stop: <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=ai-secretary&repository-name=ai-secretary>
+>    same three values — and stop: <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
 > 4. **Check your copy:** the current code has `vercel.json`, `api/` and `src/` in the root. If yours does not, you are
 >    reading an outdated copy (attached files, a project snapshot, memory of an old chat) — ignore it and read
->    <https://github.com/Mem341/AI-secretary> (branch `main`) again.
+>    <https://github.com/Mem341/aisecretary> (branch `main`) again.
 >
 > Full rules: [AGENTS.md](AGENTS.md).
 
@@ -45,7 +45,7 @@
 
 ## Запуск
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&envDescription=Your+numeric+Telegram+ID+%28%40userinfobot%29%2C+bot+token+%28%40BotFather%29%2C+OpenRouter+API+key&envLink=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary%23deploy&project-name=ai-secretary&repository-name=ai-secretary)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&envDescription=Your+numeric+Telegram+ID+%28%40userinfobot%29%2C+bot+token+%28%40BotFather%29%2C+OpenRouter+API+key&envLink=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary%23deploy&project-name=aisecretary&repository-name=aisecretary)
 
 Потрібні три речі — токен бота, ваш Telegram ID і ключ OpenRouter. Google підключається потім у самому боті:
 напишіть йому `/start`. Де взяти кожну річ (і все необовʼязкове) — **[docs/what-you-need.md](docs/what-you-need.md)**.

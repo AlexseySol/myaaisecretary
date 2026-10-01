@@ -14,7 +14,7 @@ else yourself.
 - **`AGENTS.md` in the repo root is binding.** The project is finished and runs on Vercel as it is. Never port it
   or propose services, databases or frameworks. Never ask technical questions or for plan approval.
 - **The current code has `vercel.json` at its root.** A copy without it (or with only a few commits) is an old
-  snapshot: read `main` of github.com/Mem341/AI-secretary again; never describe or port the old one.
+  snapshot: read `main` of github.com/Mem341/aisecretary again; never describe or port the old one.
 - **First ask for the three values of Step 1 in one message, then deploy.** Google is not needed for the deploy: the
   owner connects it later in the bot (it asks for the Google client file itself).
 - **Talk in the user's language.**
@@ -37,7 +37,7 @@ else yourself.
 In a chat without a terminal, or when your sandbox cannot reach api.telegram.org / github.com: do not clone, do not
 ask for network or «Capabilities» settings, a Vercel token or GitHub, do not create an empty project. Give the user
 this link (Vercel takes the code itself and asks the three values) and stop:
-<https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=ai-secretary&repository-name=ai-secretary>
+<https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
 
 ## Step 1 — collect the inputs
 
@@ -64,7 +64,7 @@ If a check fails: say which item is wrong and why, and ask for that item only.
 ## Step 3 — project, variables, deploy
 
 1. **Project — the user's own GitHub copy, connected to Vercel.** That is what makes the bot update itself: the copy
-   has `.github/workflows/update.yml` (every hour it takes the new `main` of github.com/Mem341/AI-secretary once its
+   has `.github/workflows/update.yml` (every hour it takes the new `main` of github.com/Mem341/aisecretary once its
    checks pass; Vercel builds every push). No token or secret for it.
    - Simplest: the Vercel clone link from `AGENTS.md` §3 — Vercel creates the copy in the user's GitHub and the project
      itself (preset **Other**, no build command, root `/`), and asks for the three variables.

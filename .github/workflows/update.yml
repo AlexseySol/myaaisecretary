@@ -1,8 +1,8 @@
-name: Update from Mem341/AI-secretary
+name: Update from Mem341/aisecretary
 
 # Runs only in a copy of the bot: the GitHub repository that Vercel's «Deploy» button (or a deploying agent) created
 # and connected to Vercel, or a fork (GitHub keeps Actions off in a fork until its owner turns them on in «Actions»).
-# Every hour it takes the new version of main of github.com/Mem341/AI-secretary and brings it here, but only once its
+# Every hour it takes the new version of main of github.com/Mem341/aisecretary and brings it here, but only once its
 # checks have passed. Vercel builds every push to this copy by itself, and the bot then says «🆕 Бот оновлено».
 # No token and no secret are involved: the job uses its own GITHUB_TOKEN. The .github folder stays as it is, because a
 # job's token cannot change workflows.
@@ -18,7 +18,7 @@ concurrency: update
 
 jobs:
   update:
-    if: github.repository != 'Mem341/AI-secretary'
+    if: github.repository != 'Mem341/aisecretary'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,9 +28,9 @@ jobs:
         run: |
           set -eu
           api() { curl -fsS -H "authorization: Bearer $GH_TOKEN" -H "accept: application/vnd.github+json" "$@"; }
-          git fetch --depth=1 https://github.com/Mem341/AI-secretary.git main
+          git fetch --depth=1 https://github.com/Mem341/aisecretary.git main
           sha=$(git rev-parse FETCH_HEAD)
-          runs=$(api "https://api.github.com/repos/Mem341/AI-secretary/commits/$sha/check-runs") || { echo "GitHub did not answer — next hour"; exit 0; }
+          runs=$(api "https://api.github.com/repos/Mem341/aisecretary/commits/$sha/check-runs") || { echo "GitHub did not answer — next hour"; exit 0; }
           if echo "$runs" | jq -e '[.check_runs[] | select(.status != "completed" or ((.conclusion // "") | IN("success","skipped","neutral") | not))] | length > 0' > /dev/null; then
             echo "The new version's checks are not green yet — next hour"; exit 0
           fi
@@ -48,6 +48,6 @@ jobs:
           git restore --source=FETCH_HEAD --staged --worktree -- . ':(exclude).github'
           if git diff --cached --quiet; then echo "Up to date"; exit 0; fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -qm "Update from Mem341/AI-secretary ${sha:0:7}"
+            commit -qm "Update from Mem341/aisecretary ${sha:0:7}"
           git push
           echo "Updated to ${sha:0:7}: Vercel deploys it now"
