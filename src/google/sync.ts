@@ -272,7 +272,7 @@ async function remember(env: Env, ev: GEvent, start: number): Promise<boolean> {
  * Recurring instances and past events stay silent. Returns true when a notice was sent.
  */
 export async function reportChange(env: Env, ev: GEvent, now = Date.now()): Promise<boolean> {
-  if (ev.recurringEventId) return false;
+  if (ev.recurringEventId) return reportSeries(env, ev, now);
   if (!firstTime(`ev:${ev.id}:${ev.updated ?? ""}`, 30 * MINUTE)) return false;
   const props = ev.extendedProperties?.private ?? {};
 
@@ -312,9 +312,11 @@ export async function reportChange(env: Env, ev: GEvent, now = Date.now()): Prom
     const created = ev.created ? Date.parse(ev.created) : NaN;
     const updated = ev.updated ? Date.parse(ev.updated) : now;
     const fresh = !Number.isNaN(created) && updated - created < 5 * MINUTE && !props[PROP_DRAFT];
+    // Someone added the owner to a meeting created earlier: still an invitation waiting for an answer.
+    const invited = !props[PROP_DRAFT] && awaitsAnswer(ev);
     if (!(await remember(env, ev, m.start_at))) return false;
     // n8n: an event the owner created is not announced.
-    if (!fresh || ev.organizer?.self) return false;
+    if (!(fresh || invited) || ev.organizer?.self) return false;
     await notify(env, invitationNotice(ev), ev.id, invitationButtons(ev.id));
     return true;
   }
@@ -324,6 +326,30 @@ export async function reportChange(env: Env, ev: GEvent, now = Date.now()): Prom
   if (!(await remember(env, ev, m.start_at))) return false;
   const was = `⏪ <b>Було:</b> ${esc(formatRange(new Date(before), new Date(before + duration)))}`;
   await notify(env, `${eventNotice(ev, "🔄 <b>Зустріч перенесено</b>", was)}\n\n<i>${REPLY_HINT}</i>`, ev.id);
+  return true;
+}
+
+/** The owner is a guest who has not answered yet. */
+function awaitsAnswer(ev: GEvent): boolean {
+  return !ev.organizer?.self && ev.attendees?.find((a) => a.self)?.responseStatus === "needsAction";
+}
+
+/**
+ * An instance of a recurring meeting: only a new invitation to the series is news (moves of single instances stay
+ * silent, as before). Told once, remembered on the series itself — never on the instance, which would split it.
+ */
+async function reportSeries(env: Env, instance: GEvent, now: number): Promise<boolean> {
+  const seriesId = instance.recurringEventId!;
+  if (!awaitsAnswer(instance)) return false;
+  const change = eventToChange(instance);
+  if (change.kind !== "upsert" || change.meeting.end_at < now) return false;
+  if (!firstTime(`series:${seriesId}`, 30 * MINUTE)) return false;
+  const master = await new Calendar(env).getEvent(seriesId).catch(() => null);
+  if (!master || master.status === "cancelled") return false;
+  const props = master.extendedProperties?.private ?? {};
+  if (props[PROP_START] || props[PROP_DRAFT]) return false;
+  if (!(await remember(env, master, change.meeting.start_at))) return false;
+  await notify(env, invitationNotice(instance), seriesId, invitationButtons(seriesId));
   return true;
 }
 
@@ -382,9 +408,16 @@ export function isOurChannel(env: Env, channelId: string, token: string | null):
   return channelId.startsWith("ais-") && safeEqual(token, channelToken(env));
 }
 
-function channelIdFor(day: number): string {
-  return `ais-${toKyivDate(new Date(day)).replace(/-/g, "")}`;
+/**
+ * One channel id per bot and day. Channel ids are unique per Google Cloud project: two bots sharing one OAuth client
+ * with the same id would collide, and the second one's watch would quietly never start.
+ */
+function channelIdFor(env: Env, day: number): string {
+  return `ais-${channelToken(env).slice(0, 10)}-${toKyivDate(new Date(day)).replace(/-/g, "")}`;
 }
+
+/** The id the older versions used (one per day for every bot); their channels are stopped too. */
+const oldChannelId = (day: number) => `ais-${toKyivDate(new Date(day)).replace(/-/g, "")}`;
 
 /**
  * Subscribes to push notifications for the owner's primary calendar (events.watch). Channel ids are one per day,
@@ -394,12 +427,13 @@ export async function startWatch(env: Env, now = Date.now()): Promise<void> {
   const cal = new Calendar(env);
   let resourceId: string | null = null;
   try {
-    const channel = await cal.watch(channelIdFor(now), channelToken(env), `${env.PUBLIC_URL}/api/gcal-push`, CHANNEL_TTL_SECONDS);
+    const channel = await cal.watch(channelIdFor(env, now), channelToken(env), `${env.PUBLIC_URL}/api/gcal-push`, CHANNEL_TTL_SECONDS);
     resourceId = channel.resourceId;
   } catch (err) {
     // Today's channel already exists (connected twice in a day): it keeps working.
     if (err instanceof HttpError && err.status === 400 && /not unique|already exists/i.test(err.body)) return;
     throw err;
   }
-  for (let d = 1; d <= 3; d++) await cal.stopChannel(channelIdFor(now - d * DAY), resourceId);
+  for (let d = 1; d <= 3; d++) await cal.stopChannel(channelIdFor(env, now - d * DAY), resourceId);
+  for (let d = 0; d <= 3; d++) await cal.stopChannel(oldChannelId(now - d * DAY), resourceId);
 }

@@ -151,6 +151,41 @@ describe("instant notices, remembered by Google itself", () => {
     expect(writes).toHaveLength(1);
   });
 
+  it("an invitation to a meeting created earlier is announced while the owner has not answered", async () => {
+    await connectGoogle();
+    const writes: { id: string; props: Record<string, string> }[] = [];
+    const calls = mockFetch([propWrites(writes)]);
+    const { env } = testEnv();
+    const ev = timed("e5", iso(soon), iso(soon + HOUR), {
+      created: iso(now - 7 * 86400_000),
+      updated: iso(now),
+      organizer: { email: "boss@partner.ua" },
+      attendees: [{ email: "me@x.ua", self: true, responseStatus: "needsAction" }],
+    });
+    expect(await reportChange(env, ev, now)).toBe(true);
+    expect(sentTexts(calls)[0]).toContain("📅 <b>Запрошення на зустріч</b>");
+  });
+
+  it("a new invitation to a recurring meeting is announced once, for the series, remembered on the series", async () => {
+    await connectGoogle();
+    const writes: { id: string; props: Record<string, string> }[] = [];
+    const master = timed("ser1", iso(soon), iso(soon + HOUR), { organizer: { email: "boss@partner.ua" } });
+    const calls = mockFetch([propWrites(writes), (url) => (url.pathname.endsWith("/events/ser1") ? Response.json(master) : undefined)]);
+    const { env } = testEnv();
+    const instance = (id: string, at: number) =>
+      timed(id, iso(at), iso(at + HOUR), {
+        recurringEventId: "ser1",
+        updated: iso(now),
+        organizer: { email: "boss@partner.ua" },
+        attendees: [{ email: "me@x.ua", self: true, responseStatus: "needsAction" }],
+      });
+    expect(await reportChange(env, instance("ser1_1", soon), now)).toBe(true);
+    expect(await reportChange(env, instance("ser1_2", soon + 7 * 86400_000), now)).toBe(false);
+    expect(sentTexts(calls)).toHaveLength(1);
+    expect(tgCalls(calls, "sendMessage")[0]!.reply_markup).toMatchObject({ inline_keyboard: [[{ callback_data: "accept:ser1" }, { callback_data: "decline:ser1" }]] });
+    expect(writes.map((w) => w.id)).toEqual(["ser1"]);
+  });
+
   it("reports a cancellation of a known event, but not one the bot cancelled itself", async () => {
     await connectGoogle();
     const full = (props: Record<string, string>) =>
@@ -253,10 +288,16 @@ describe("push channel without stored state", () => {
     ]);
     const { env } = testEnv();
     await startWatch(env, Date.parse("2026-09-28T12:00:00Z"));
-    expect(watch.id).toBe("ais-20260928");
+    // Unique per bot: two bots sharing one Google project must not collide on the id.
+    const bot = channelToken(env).slice(0, 10);
+    expect(watch.id).toBe(`ais-${bot}-20260928`);
     expect(watch.token).toBe(channelToken(env));
     expect(watch.address).toBe("https://bot.test/api/gcal-push");
-    expect(stopped).toEqual(["ais-20260927", "ais-20260926", "ais-20260925"]);
+    expect(stopped).toEqual([
+      `ais-${bot}-20260927`, `ais-${bot}-20260926`, `ais-${bot}-20260925`,
+      // the older per-day ids
+      "ais-20260928", "ais-20260927", "ais-20260926", "ais-20260925",
+    ]);
   });
 
   it("accepts pushes only with the derived token", async () => {

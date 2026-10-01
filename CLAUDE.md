@@ -58,7 +58,9 @@ webhook and redirects to the bot; `/api/health` shows the state.
   APIs and setup, Telegram, Bitrix24; the owner adds a video by replying to a guide with it, kept in `OwnerSettings.gv`). Commands: /start /settings /bitrix /reset /help; everything else
   goes to the agents.
 - `src/google/` — OAuth (grant in a pinned message), Calendar API + push notices (`sync.ts`: n8n invitation
-  format with `accept:{id}` / `decline:{id}` buttons), `reminders.ts` (meeting reminders), `digest.ts` (the morning report: meetings with guests/links/overlaps/free
+  format with `accept:{id}` / `decline:{id}` buttons; push channel ids are unique per bot and day — Google requires them
+  unique per Cloud project; an invitation is news when fresh or still unanswered; a recurring one once, claimed on the
+  series, never on an instance), `reminders.ts` (meeting reminders), `digest.ts` (the morning report: meetings with guests/links/overlaps/free
   windows plus the blocks ticked in /settings → ☀️ — invitations with ✅/❌, mail, AI mail summary, Bitrix24, tomorrow; at
   the owner's time via a `digest:` signal in the signal calendar; `sendDigestOnce` claims the day's signal (`aisSent`) so it
   goes once; `sendDueDigest` — any wake-up up to 3 h after the time sends it if Google's signal did not; the daily cron
