@@ -11,15 +11,12 @@ import { isOverdue, kyivDateTime, projectName } from "./format";
  * responsible, creator, dates and link; plus an analytics sheet. Read-only: nothing in Bitrix24 changes.
  */
 
-/** Tasks in the report: up to this many open and closed ones (tasks come fast, 2 500 per Bitrix24 batch request). */
-const MAX_TASKS = 1000;
-const MAX_CLOSED = 300;
 /** Tasks summarised by AI per model call; the calls run in parallel. */
 const AI_CHUNK = 12;
 /** Tasks whose discussion is read per round (3 batch requests each). */
 const COMMENT_ROUND = 150;
 /**
- * The whole report must fit Vercel's 60 seconds. Discussions are read, most important tasks first, until this point;
+ * Every task goes in (they come fast, 2 500 per Bitrix24 batch request). The whole report must fit Vercel's 60 seconds. Discussions are read, most important tasks first, until this point;
  * the AI summaries get until the next one; then the file is built and sent, whatever was not reached is marked so.
  */
 const COMMENTS_UNTIL_MS = 25_000;
@@ -115,10 +112,10 @@ export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportS
           : scope === "week"
             ? { MEMBER: me.id, REAL_STATUS: OPEN, ">=DEADLINE": iso(now), "<DEADLINE": iso(now + 7 * 86_400_000) }
             : { MEMBER: me.id, REAL_STATUS: OPEN };
-  const active = scope === "closed" ? [] : await bx.tasks(openFilter, MAX_TASKS);
+  const active = scope === "closed" ? [] : await bx.tasks(openFilter);
   const closed =
     scope === "all" || scope === "closed"
-      ? await bx.tasks({ MEMBER: me.id, REAL_STATUS: ["5"], ">=CLOSED_DATE": iso(now - 30 * 86_400_000) }, MAX_CLOSED, { CLOSED_DATE: "desc" })
+      ? await bx.tasks({ MEMBER: me.id, REAL_STATUS: ["5"], ">=CLOSED_DATE": iso(now - 30 * 86_400_000) }, Infinity, { CLOSED_DATE: "desc" })
       : [];
   const tasks = [...active, ...closed];
   if (!tasks.length) return null;

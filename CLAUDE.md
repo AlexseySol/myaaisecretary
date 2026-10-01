@@ -47,9 +47,11 @@ webhook and redirects to the bot; `/api/health` shows the state.
   requests. Keep prompts and tool names in line with the n8n originals.
 - `src/bitrix/` — optional Bitrix24 tasks via an incoming webhook (`BITRIX_WEBHOOK_URL`, rights: tasks, user, im): `client.ts` (REST; a task's discussion is its «Чат завдання» (im chat, `im.chat.get` by entity) plus old comments; tasks
   are only read, commented and created — never closed, changed or deleted; keep it that way), `names.ts` (people by
-  name in any case form / alphabet), `report.ts` (Excel: tasks, stage, status, state from comments by AI, analytics; up to 1000 open + 300 closed — task
-  pages come in one batch request; discussions and AI summaries most important first within a time budget
-  (`COMMENTS_UNTIL_MS`, `AI_UNTIL_MS`) so the report always fits Vercel's 60 s; `list_tasks` gives 50 a page with `total`),
+  name in any case form / alphabet), `report.ts` (Excel: tasks, stage, status, state from comments by AI, analytics; every task — pages after the first
+  come in one batch request; discussions and AI summaries most important first within a time budget
+  (`COMMENTS_UNTIL_MS`, `AI_UNTIL_MS`) so the report always fits Vercel's 60 s; `list_tasks` returns all matching
+  tasks, but above 30 with no period it returns `needScope` and the agent asks «all or for a period?»; a task's whole
+  chat is read, page by page by LAST_ID),
   `menu.ts` (/bitrix buttons `bx:…`, no AI; «📊 Excel-звіт» first asks what to export, `REPORT_SCOPES`). The `bitrix_agent` (`agent/bitrixTools.ts`, `bitrixPrompt`) joins the
   Supervisor and `route.ts` when it is configured. `lib/xlsx.ts` writes .xlsx without dependencies.
 - `src/bot/` — `onboarding.ts` (/start: first the tour «Що я вмію» with «⚙️ Налаштувати», nothing pinned yet; /help),

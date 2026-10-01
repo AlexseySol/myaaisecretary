@@ -68,6 +68,27 @@ export function plainText(text: string | undefined): string {
 
 /** Bitrix24's page size. */
 const PAGE = 50;
+/** One task's chat is read to its beginning, up to this many pages of 50. */
+const MAX_CHAT_PAGES = 40;
+
+type ChatPage = { messages?: Record<string, unknown>[]; users?: { id: number | string; name?: string }[] };
+
+/** A page of a task chat as comments (system messages as «Система»). */
+function chatComments(page: ChatPage | undefined): BxComment[] {
+  const names = new Map((page?.users ?? []).map((u) => [String(u.id), u.name ?? ""]));
+  return (page?.messages ?? [])
+    .map((m) => {
+      const author = String(m.author_id ?? m.AUTHOR_ID ?? "0");
+      return {
+        id: `chat${m.id}`,
+        authorId: author,
+        authorName: author === "0" ? "Система" : names.get(author) || `#${author}`,
+        date: String(m.date ?? ""),
+        text: plainText(String(m.text ?? "")),
+      };
+    })
+    .filter((c) => c.text);
+}
 
 /** Parameters as PHP reads them (`filter[REAL_STATUS][0]=2`), for the commands of a batch request. */
 export function phpQuery(value: unknown, prefix = ""): string {
@@ -174,7 +195,7 @@ export class Bitrix {
    * Tasks by a Bitrix24 filter, up to `limit`: the first page tells how many there are, the rest come in ONE batch
    * request (50 pages = 2 500 tasks per request) — fast enough for a 60-second function.
    */
-  async tasks(filter: Record<string, unknown>, limit = 50, order: Record<string, string> = { DEADLINE: "asc" }): Promise<BxTask[]> {
+  async tasks(filter: Record<string, unknown>, limit = Infinity, order: Record<string, string> = { DEADLINE: "asc" }): Promise<BxTask[]> {
     const first = await this.tasksPage(filter, 0, order);
     const out = [...first.tasks];
     const want = Math.min(first.total, limit);
@@ -200,7 +221,16 @@ export class Bitrix {
    * right for the chat; without it only old comments are read.
    */
   async comments(id: string | number): Promise<BxComment[]> {
-    return (await this.commentsOf([String(id)]))[String(id)] ?? [];
+    const key = String(id);
+    const first = (await this.commentsOf([key]))[key] ?? [];
+    // A long chat: read it whole, not only its latest 50 messages.
+    const chatCount = first.filter((c) => c.id.startsWith("chat")).length;
+    if (chatCount < PAGE) return first;
+    const chat = (await this.chatIds([key]))[key];
+    if (!chat) return first;
+    const full = await this.fullChat(chat).catch(() => []);
+    const merged = new Map([...first, ...full].map((c) => [c.id, c]));
+    return [...merged.values()].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
   }
 
   /** Discussions of many tasks at once (batch requests of up to 50 calls). */
@@ -247,28 +277,33 @@ export class Bitrix {
   private async chatMessagesOf(chats: Record<string, string>): Promise<Record<string, BxComment[]>> {
     const tasks = Object.keys(chats);
     if (!tasks.length) return {};
-    type Page = { messages?: Record<string, unknown>[]; users?: { id: number | string; name?: string }[] };
-    const raw = await this.batch<Page>(
+    const raw = await this.batch<ChatPage>(
       Object.fromEntries(tasks.map((t) => [`m${t}`, `im.dialog.messages.get?DIALOG_ID=chat${chats[t]}&LIMIT=50`])),
-    ).catch(() => ({}) as Record<string, Page>);
+    ).catch(() => ({}) as Record<string, ChatPage>);
     const out: Record<string, BxComment[]> = {};
-    for (const t of tasks) {
-      const page = raw[`m${t}`];
-      const names = new Map((page?.users ?? []).map((u) => [String(u.id), u.name ?? ""]));
-      out[t] = (page?.messages ?? [])
-        .map((m) => {
-          const author = String(m.author_id ?? m.AUTHOR_ID ?? "0");
-          return {
-            id: `chat${m.id}`,
-            authorId: author,
-            authorName: author === "0" ? "Система" : names.get(author) || `#${author}`,
-            date: String(m.date ?? ""),
-            text: plainText(String(m.text ?? "")),
-          };
-        })
-        .filter((c) => c.text);
-    }
+    for (const t of tasks) out[t] = chatComments(raw[`m${t}`]);
     return out;
+  }
+
+  /**
+   * The whole chat of one task: Bitrix24 gives 50 messages a call, newest first; older pages follow by LAST_ID until
+   * the beginning (at most MAX_CHAT_PAGES — 2 000 messages — so one request stays within Vercel's time).
+   */
+  private async fullChat(chatId: string): Promise<BxComment[]> {
+    const all: BxComment[] = [];
+    let lastId: number | undefined;
+    for (let page = 0; page < MAX_CHAT_PAGES; page++) {
+      const { result } = await this.call<ChatPage>("im.dialog.messages.get", { DIALOG_ID: `chat${chatId}`, LIMIT: PAGE, ...(lastId ? { LAST_ID: lastId } : {}) });
+      const messages = result?.messages ?? [];
+      all.push(...chatComments(result));
+      const ids = messages.map((m) => Number(m.id)).filter((n) => Number.isFinite(n) && n > 0);
+      if (messages.length < PAGE || !ids.length) break;
+      const oldest = Math.min(...ids);
+      if (lastId !== undefined && oldest >= lastId) break;
+      lastId = oldest;
+    }
+    // Pages overlap by nothing, but be safe: one entry per message.
+    return [...new Map(all.map((c) => [c.id, c])).values()];
   }
 
   /** Writes into the task's chat when it has one (new task cards), else as an old-style comment. */

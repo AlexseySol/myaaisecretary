@@ -250,17 +250,63 @@ describe("the task chat («Чат завдання») of new Bitrix24 task cards
     mockFetch([bitrixRoute()]);
     const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
     const tool = bitrixTools(env).find((t) => t.spec.name === "get_task_comments")!;
-    const out = (await tool.run({ taskId: 124 })) as { total: number; messages: { author: string; text: string }[] };
+    const out = (await tool.run({ taskId: 124 })) as { total: number; discussion: string };
     expect(out.total).toBe(2);
-    expect(out.messages).toEqual([
-      expect.objectContaining({ author: "Система", text: "Задачу взято в роботу" }),
-      expect.objectContaining({ author: "Олена Коваль", text: "Постачальник надіслав правки, узгоджую з юристом" }),
+    // The whole discussion, oldest first, every message in full.
+    expect(out.discussion.indexOf("Система: Задачу взято в роботу")).toBeGreaterThan(-1);
+    expect(out.discussion.indexOf("Олена Коваль: Постачальник надіслав правки, узгоджую з юристом")).toBeGreaterThan(
+      out.discussion.indexOf("Задачу взято в роботу"),
+    );
+  });
+
+  it("a long task chat is read to its beginning, page by page", async () => {
+    const { Bitrix } = await import("../src/bitrix/client");
+    const msgs = Array.from({ length: 120 }, (_, i) => ({ id: i + 1, author_id: 9, date: new Date(Date.UTC(2026, 8, 1, 0, i)).toISOString(), text: `msg ${i + 1}` }));
+    const page = (lastId?: number) => {
+      const older = msgs.filter((m) => !lastId || m.id < lastId).sort((a, b) => b.id - a.id).slice(0, 50);
+      return { messages: older, users: [{ id: 9, name: "Олена" }] };
+    };
+    mockFetch([
+      (url, init) => {
+        if (!url.href.startsWith(WEBHOOK)) return undefined;
+        const method = url.pathname.split("/").at(-1)!.replace(/\.json$/, "");
+        const body = JSON.parse(init.bodyText || "{}");
+        if (method === "im.dialog.messages.get") return Response.json({ result: page(body.LAST_ID) });
+        if (method === "batch") {
+          const cmd = body.cmd as Record<string, string>;
+          const answers: Record<string, unknown> = { t7: [], c7: { ID: 55 }, m7: page() };
+          return Response.json({ result: { result: Object.fromEntries(Object.keys(cmd).filter((k) => k in answers).map((k) => [k, answers[k]])) } });
+        }
+        return undefined;
+      },
     ]);
-    // Older ones on request.
-    const latest = (await tool.run({ taskId: 124, limit: 1 })) as { messages: { text: string }[]; older?: number };
-    expect(latest.messages.map((m) => m.text)).toEqual(["Постачальник надіслав правки, узгоджую з юристом"]);
-    expect(latest.older).toBe(1);
-    expect(((await tool.run({ taskId: 124, limit: 1, skip: 1 })) as { messages: { text: string }[] }).messages.map((m) => m.text)).toEqual(["Задачу взято в роботу"]);
+    const all = await new Bitrix({ BITRIX_WEBHOOK_URL: WEBHOOK }).comments(7);
+    expect(all).toHaveLength(120);
+    expect(all[0]!.text).toBe("msg 1");
+    expect(all.at(-1)!.text).toBe("msg 120");
+  });
+
+  it("many tasks and no period: first the count and the question — all or for a period", async () => {
+    const many = Array.from({ length: 80 }, (_, i) => ({ id: String(i + 1), title: `T${i + 1}`, status: "2", responsible: { name: "Іван" }, creator: { name: "Я" } }));
+    mockFetch([
+      (url, init) => {
+        if (!url.href.startsWith(WEBHOOK)) return undefined;
+        const method = url.pathname.split("/").at(-1)!.replace(/\.json$/, "");
+        const body = JSON.parse(init.bodyText || "{}");
+        if (method === "user.current") return Response.json({ result: { ID: "1", NAME: "Я" } });
+        if (method === "tasks.task.list") return Response.json({ result: { tasks: many.slice(0, 50) }, next: 50, total: 80 });
+        if (method === "batch") {
+          const cmd = body.cmd as Record<string, string>;
+          return Response.json({ result: { result: Object.fromEntries(Object.keys(cmd).map((k) => [k, { tasks: many.slice(50) }])) } });
+        }
+        return undefined;
+      },
+    ]);
+    const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
+    const list = bitrixTools(env).find((t) => t.spec.name === "list_tasks")!;
+    expect(await list.run({})).toMatchObject({ total: 80, needScope: true });
+    const all = (await list.run({ all: true })) as { total: number; tasks: unknown[] };
+    expect(all.tasks).toHaveLength(80);
   });
 
   it("many tasks: the first page tells the total, the rest come in one batch request", async () => {

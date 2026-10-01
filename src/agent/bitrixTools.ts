@@ -16,6 +16,8 @@ const ids = (description: string) => ({ type: "array", items: { type: "integer" 
 
 const PRIORITY: Record<string, string> = { low: "0", normal: "1", high: "2" };
 const ACTIVE_STATUSES = ["1", "2", "3", "4", "6"];
+/** Above this many matching tasks (and no period named) the agent asks: all of them or for a period. */
+const ASK_ABOVE = 30;
 
 async function brief(bx: Bitrix, t: BxTask, me: Person): Promise<Record<string, unknown>> {
   return {
@@ -63,8 +65,8 @@ function statusFilter(status: string): Record<string, unknown> {
 /** The owner's task numbers: what is open, late, whose, how fast things get closed. Computed, not guessed. */
 export async function taskStats(bx: Bitrix, now = Date.now()): Promise<Record<string, unknown>> {
   const me = await bx.me();
-  const active = await bx.tasks({ MEMBER: me.id, REAL_STATUS: ACTIVE_STATUSES }, 2500);
-  const closed = await bx.tasks({ MEMBER: me.id, REAL_STATUS: ["5"], ">=CLOSED_DATE": new Date(now - 30 * 86_400_000).toISOString() }, 2500);
+  const active = await bx.tasks({ MEMBER: me.id, REAL_STATUS: ACTIVE_STATUSES });
+  const closed = await bx.tasks({ MEMBER: me.id, REAL_STATUS: ["5"], ">=CLOSED_DATE": new Date(now - 30 * 86_400_000).toISOString() });
   const byStatus: Record<string, number> = {};
   const byPerson: Record<string, { active: number; overdue: number; closed30d: number }> = {};
   const person = async (t: BxTask) => t.responsible?.name || (await bx.personName(t.responsibleId));
@@ -115,7 +117,7 @@ export function bitrixTools(env: Env): Tool[] {
       spec: {
         name: "list_tasks",
         description:
-          "List the owner's Bitrix24 tasks, 50 at a time (total says how many match; nextStart gives the next 50). role: any (default — every task the owner takes part in), responsible (owner does it), creator (owner set it), accomplice, auditor. status: active (default), overdue, completed, all. Optional: responsibleId (someone's tasks — get the id with find_user), search (words of the title), deadlineFrom/deadlineTo (ISO).",
+          "List the owner's Bitrix24 tasks — all that match, never cut. When more than 30 match and the owner named no period and did not ask for all, it returns only the count (needScope) — then ask: all of them or for a period? role: any (default — every task the owner takes part in), responsible (owner does it), creator (owner set it), accomplice, auditor. status: active (default), overdue, completed, all. Optional: responsibleId (someone's tasks — get the id with find_user), search (words of the title), deadlineFrom/deadlineTo (ISO).",
         parameters: object(
           {
             role: { type: "string", enum: ["any", "responsible", "creator", "accomplice", "auditor"] },
@@ -124,7 +126,9 @@ export function bitrixTools(env: Env): Tool[] {
             search: s("Words of the task title"),
             deadlineFrom: s("ISO date/time"),
             deadlineTo: s("ISO date/time"),
-            start: { type: "integer", description: "nextStart from the previous answer, for the next 50" },
+            createdFrom: s("Set on or after (ISO) — the period by date of setting"),
+            createdTo: s("Set on or before (ISO)"),
+            all: { type: "boolean", description: "true — the owner wants all tasks, however many" },
           },
           [],
         ),
@@ -138,16 +142,20 @@ export function bitrixTools(env: Env): Tool[] {
         if (str(a, "search")) filter["%TITLE"] = str(a, "search");
         if (str(a, "deadlineFrom")) filter[">=DEADLINE"] = str(a, "deadlineFrom");
         if (str(a, "deadlineTo")) filter["<=DEADLINE"] = str(a, "deadlineTo");
-        const start = Math.max(0, Number(a.start) || 0);
-        const page = await bx.tasksPage(filter, start);
-        const next = start + page.tasks.length;
-        return {
-          total: page.total,
-          tasks: await Promise.all(page.tasks.map((t) => brief(bx, t, me))),
-          ...(next < page.total
-            ? { nextStart: next, note: "Є ще задачі. Не гортай усе: дай підсумок (скільки, що горить) і запропонуй звузити — людина, проєкт, дедлайн, статус; nextStart — на «покажи ще»" }
-            : {}),
-        };
+        if (str(a, "createdFrom")) filter[">=CREATED_DATE"] = str(a, "createdFrom");
+        if (str(a, "createdTo")) filter["<=CREATED_DATE"] = str(a, "createdTo");
+        const period = ["deadlineFrom", "deadlineTo", "createdFrom", "createdTo", "search", "responsibleId"].some((k) => str(a, k));
+        const first = await bx.tasksPage(filter, 0);
+        // Many tasks and no scope given: first ask — all of them, or for a period.
+        if (first.total > ASK_ABOVE && !period && a.all !== true) {
+          return {
+            total: first.total,
+            needScope: true,
+            note: `Задач ${first.total}. Спитай власника: показати всі ${first.total} чи за період (за дедлайном або датою постановки — сьогодні, тиждень, місяць)? Потім виклич знову з all=true або з датами.`,
+          };
+        }
+        const tasks = first.total > first.tasks.length ? await bx.tasks(filter) : first.tasks;
+        return { total: tasks.length, tasks: await Promise.all(tasks.map((t) => brief(bx, t, me))) };
       },
     },
     {
@@ -175,27 +183,17 @@ export function bitrixTools(env: Env): Tool[] {
       spec: {
         name: "get_task_comments",
         description:
-          "The task's discussion — its «Чат завдання» (incl. system messages about status changes) and comments: who, when, what. The real state of work is usually there.",
+          "The task's whole discussion — its «Чат завдання» (incl. system messages about status changes) and comments, oldest first: who, when, what. The real state of work is usually there. A very long one comes in parts (part).",
         parameters: object(
-          {
-            taskId: { type: "integer" },
-            limit: { type: "integer", description: "How many of the latest messages; default 30" },
-            skip: { type: "integer", description: "Skip this many latest ones — to read older messages" },
-          },
+          { taskId: { type: "integer" }, part: { type: "number", description: "Which part of a very long discussion, from 1" } },
           ["taskId"],
         ),
       },
       async run(a) {
+        // The whole discussion, every message in full; a very long one comes in parts, nothing is cut off.
         const comments = await bx.comments(Number(a.taskId));
-        const limit = Math.max(1, Number(a.limit) || 30);
-        const skip = Math.max(0, Number(a.skip) || 0);
-        const end = comments.length - skip;
-        const shown = comments.slice(Math.max(0, end - limit), Math.max(0, end));
-        return {
-          total: comments.length,
-          messages: shown.map((c) => ({ author: c.authorName, date: kyivDateTime(c.date), text: c.text.slice(0, 4000) })),
-          ...(end - limit > 0 ? { older: end - limit, note: "Є старіші повідомлення — skip, якщо вони потрібні" } : {}),
-        };
+        const text = comments.map((c) => `[${kyivDateTime(c.date)}] ${c.authorName}: ${c.text}`).join("\n");
+        return { total: comments.length, discussion: comments.length ? textPart(text, Number(a.part) || 1) : "Коментарів немає" };
       },
     },
     {
