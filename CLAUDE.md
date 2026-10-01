@@ -41,7 +41,7 @@ webhook and redirects to the bot; `/api/health` shows the state.
   `route.ts` (the Supervisor's keyword routing table in code: an obvious calendar/mail request, or a reply to the
   bot's notice, goes straight to its agent; anything unclear goes to the Supervisor). No Think tool. ✅ / ❌ under an
   invitation (`accept:` / `decline:`) is answered in code with the same RSVP tool, no model call.
-  Models per request (`modelFor`): text → `AGENT_MODEL` (qwen3.8-flash), pictures → `VISION_MODEL` (qwen3.7-flash),
+  Models per request (`modelFor`): text → `AGENT_MODEL` (gpt-6-luna-pro), pictures → `VISION_MODEL` (gemini-2.5-flash),
   voice → `LLM_MODEL` (gpt-6-luna-pro); a `ModelError` before any write tool ran retries the request on `LLM_MODEL`,
   never after a write; so does a junk answer with no real word («😊», «✅✅✅ Т Т», `isJunk`) — it is never sent. `npm run eval:models` (`eval/`, real OpenRouter, fake tools) compares models on typical
   requests. Keep prompts and tool names in line with the n8n originals.

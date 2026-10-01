@@ -12,6 +12,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    v: 14,
+    date: "2026-10-01",
+    changed: ["🧠 Розумніші моделі ШІ: текстові запити й зведення — GPT-6 Luna Pro, скріншоти й фото — Gemini 2.5 Flash"],
+  },
+  {
     v: 13,
     date: "2026-10-01",
     changed: [
