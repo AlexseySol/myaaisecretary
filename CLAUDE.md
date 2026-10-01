@@ -37,7 +37,9 @@ webhook and redirects to the bot; `/api/health` shows the state.
   in 20 000-character parts (`lib/parse.ts` `textPart`, the tools' `part`), searches and folders 25 files a page
   (`nextPage`); with many matches the agent asks the owner to narrow instead of paging through everything), `files.ts`
   (a file as text for a tool: `lib/parse.ts` reads .docx/.xlsx/.pptx/.csv/text without dependencies via `lib/unzip.ts`;
-  a PDF goes to the model as a `file` part with OpenRouter's free pdf-text parser), `memory.ts` (one-session window memory), `html.ts`,
+  a PDF goes to the model as a `file` part with OpenRouter's free pdf-text parser), `memory.ts` (one-session window memory), `html.ts` (the answer as
+  Telegram HTML: Markdown and web tags mapped, only Telegram's tags, proper nesting, safe links, never cut —
+  `Telegram.send` splits long text keeping tags whole),
   `route.ts` (the Supervisor's keyword routing table in code: an obvious calendar/mail request, or a reply to the
   bot's notice, goes straight to its agent; anything unclear goes to the Supervisor). No Think tool. ✅ / ❌ under an
   invitation (`accept:` / `decline:`) is answered in code with the same RSVP tool, no model call.

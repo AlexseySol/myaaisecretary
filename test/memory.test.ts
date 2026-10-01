@@ -189,6 +189,58 @@ describe("old requests in the memory are never carried out again", () => {
     expect(deletionAllowed("видали ЫЫ і ТЕСТ", 1, "Планування")).toMatch(/confirmation/);
   });
 
+  it("free windows: working hours 09–19 Kyiv, around the busy times, long enough, never in the past", async () => {
+    const { freeWindows } = await import("../src/agent/calendarTools");
+    // 2026-10-02 (Kyiv = UTC+3): busy 10:00–11:00 and 14:00–14:30.
+    const busy = [
+      { start: "2026-10-02T10:00:00+03:00", end: "2026-10-02T11:00:00+03:00" },
+      { start: "2026-10-02T14:00:00+03:00", end: "2026-10-02T14:30:00+03:00" },
+    ];
+    const from = Date.parse("2026-10-02T00:00:00+03:00");
+    const to = Date.parse("2026-10-02T23:59:00+03:00");
+    const iso = (w: { start: number; end: number }) => [new Date(w.start).toISOString(), new Date(w.end).toISOString()];
+    expect(freeWindows(busy, from, to, 30, from).map(iso)).toEqual([
+      ["2026-10-02T06:00:00.000Z", "2026-10-02T07:00:00.000Z"],
+      ["2026-10-02T08:00:00.000Z", "2026-10-02T11:00:00.000Z"],
+      ["2026-10-02T11:30:00.000Z", "2026-10-02T16:00:00.000Z"],
+    ]);
+    // 90 minutes do not fit 09:00–10:00: the first window is 11:00–14:00.
+    expect(freeWindows(busy, from, to, 90, from).map(iso)[0]).toEqual(["2026-10-02T08:00:00.000Z", "2026-10-02T11:00:00.000Z"]);
+    // Never in the past: at 12:00 the morning is gone.
+    expect(freeWindows(busy, from, to, 30, Date.parse("2026-10-02T12:00:00+03:00")).map(iso)[0]).toEqual(["2026-10-02T09:00:00.000Z", "2026-10-02T11:00:00.000Z"]);
+  });
+
+  it("busy times come from the calendar's events (Google's /freeBusy needs a scope the bot has not)", async () => {
+    await connectGoogle();
+    let freeBusyCalled = false;
+    mockFetch([
+      (url) => {
+        if (url.pathname.endsWith("/freeBusy")) {
+          freeBusyCalled = true;
+          return Response.json({ error: { code: 403 } }, { status: 403 });
+        }
+        if (url.pathname.endsWith("/calendars/primary/events")) {
+          return Response.json({
+            items: [
+              { id: "a", status: "confirmed", start: { dateTime: "2026-10-02T10:00:00+03:00" }, end: { dateTime: "2026-10-02T11:00:00+03:00" } },
+              { id: "b", status: "confirmed", transparency: "transparent", start: { dateTime: "2026-10-02T12:00:00+03:00" }, end: { dateTime: "2026-10-02T13:00:00+03:00" } },
+              { id: "c", status: "confirmed", attendees: [{ email: "me@x.ua", self: true, responseStatus: "declined" }], start: { dateTime: "2026-10-02T15:00:00+03:00" }, end: { dateTime: "2026-10-02T16:00:00+03:00" } },
+              { id: "d", status: "confirmed", start: { date: "2026-10-02" }, end: { date: "2026-10-03" } },
+            ],
+          });
+        }
+        return undefined;
+      },
+    ]);
+    const { env } = testEnv();
+    const { calendarTools } = await import("../src/agent/calendarTools");
+    const tool = calendarTools(env, "me@x.ua").find((t) => t.spec.name === "check_free_busy")!;
+    const out = (await tool.run({ timeMin: "2026-10-02T00:00:00+03:00", timeMax: "2026-10-02T23:59:00+03:00", durationMinutes: 30 })) as { busy: unknown[]; free: unknown[] };
+    expect(freeBusyCalled).toBe(false);
+    expect(out.busy).toEqual([{ start: "2026-10-02T10:00:00+03:00", end: "2026-10-02T11:00:00+03:00" }]);
+    expect(out.free.length).toBeGreaterThan(0);
+  });
+
   it("a request that also asks for an email goes to the Supervisor, which has both agents", async () => {
     const { routeByKeywords, routeFollowUp } = await import("../src/agent/route");
     const input = (text: string, replyRef?: string) => ({ chatId: OWNER, inputType: "text" as const, text, replyRef });

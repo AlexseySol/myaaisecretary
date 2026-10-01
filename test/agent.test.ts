@@ -15,15 +15,41 @@ describe("Parse Agent Output (toTelegramHtml)", () => {
     expect(toTelegramHtml("```html\n<b>Привіт</b>\n```")).toBe("<b>Привіт</b>");
     expect(toTelegramHtml('{"response":"<i>ок</i>"}')).toBe("<i>ок</i>");
     expect(toTelegramHtml("**Важливо** [лінк](https://x.ua)")).toBe('<b>Важливо</b> <a href="https://x.ua">лінк</a>');
-    expect(toTelegramHtml("<p>Абзац</p><br><b>жирний")).toBe("Абзац<b>жирний</b>");
+    expect(toTelegramHtml("<p>Абзац</p><br><b>жирний")).toBe("Абзац\n\n<b>жирний</b>");
     expect(toTelegramHtml("A & B &amp; C, 1 < 2")).toBe("A &amp; B &amp; C, 1 &lt; 2");
     expect(toTelegramHtml("")).toBe("🙂");
   });
 
-  it("cuts to Telegram's limit without leaving a tag open", () => {
-    const out = toTelegramHtml(`<b>${"я".repeat(5000)}</b>`);
-    expect(out.length).toBeLessThan(4100);
-    expect(out.endsWith("</b>")).toBe(true);
+  it("web HTML and Markdown become Telegram's: headings, lists, line breaks, strong/em, code", () => {
+    expect(toTelegramHtml("<h2>Розклад</h2><ul><li>Стендап</li><li>Демо</li></ul>")).toBe("<b>Розклад</b>\n\n• Стендап\n• Демо");
+    expect(toTelegramHtml("<strong>так</strong> і <em>ні</em> <del>було</del>")).toBe("<b>так</b> і <i>ні</i> <s>було</s>");
+    expect(toTelegramHtml("Рядок 1<br/>Рядок 2")).toBe("Рядок 1\nРядок 2");
+    expect(toTelegramHtml("### Підсумок\n- перше\n- друге\n*важливо* і `код`")).toBe("<b>Підсумок</b>\n• перше\n• друге\n<i>важливо</i> і <code>код</code>");
+    expect(toTelegramHtml("Ось:\n```\nif (a < b) x();\n```")).toBe("Ось:\n<pre>if (a &lt; b) x();</pre>");
+  });
+
+  it("never sends what Telegram rejects: crossed tags, stray closers, unsafe or missing links", () => {
+    expect(toTelegramHtml("<b>жирний <i>обидва</b> курсив</i>")).toBe("<b>жирний <i>обидва</i></b><i> курсив</i>");
+    expect(toTelegramHtml("текст</b> далі")).toBe("текст далі");
+    expect(toTelegramHtml('<a href="javascript:alert(1)">клік</a>')).toBe("клік");
+    expect(toTelegramHtml("<a>без адреси</a>")).toBe("без адреси");
+    expect(toTelegramHtml('<a href="https://x.ua/?a=1&b=2">лінк</a>')).toBe('<a href="https://x.ua/?a=1&amp;b=2">лінк</a>');
+    expect(toTelegramHtml("<script>x</script><b></b>ок")).toBe("xок");
+  });
+
+  it("a long answer is not cut: Telegram.send splits it, every part valid with its tags whole", async () => {
+    const { splitMessage } = await import("../src/telegram/api");
+    const out = toTelegramHtml(`<b>${"я ".repeat(3000)}</b>`);
+    expect(out.length).toBeGreaterThan(5000);
+    const parts = splitMessage(out);
+    expect(parts.length).toBe(2);
+    for (const p of parts) {
+      expect(p.length).toBeLessThanOrEqual(4096);
+      expect(p.startsWith("<b>")).toBe(true);
+      expect(p.endsWith("</b>")).toBe(true);
+    }
+    const linked = splitMessage(`<a href="https://x.ua">${"слово ".repeat(1000)}</a>`);
+    expect(linked[1]!.startsWith('<a href="https://x.ua">')).toBe(true);
   });
 });
 

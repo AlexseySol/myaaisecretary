@@ -2,6 +2,7 @@ import { type Env, zoomConfigured } from "../env";
 import { Calendar, type GEvent } from "../google/calendar";
 import { PROP_BOT_CANCEL, PROP_DRAFT, PROP_START } from "../google/sync";
 import { randomId } from "../lib/crypto";
+import { DAY, formatTime, kyivLocalToDate, kyivParts, MINUTE } from "../lib/time";
 import { mark } from "../session";
 import { createZoomMeeting } from "../zoom/client";
 import { str, type Tool } from "./runner";
@@ -89,6 +90,30 @@ export function deletionAllowed(currentText: string | undefined, deletedAlready:
   return null;
 }
 
+/**
+ * Free windows of at least `minutes` between the busy intervals, within working hours (09:00–19:00 Kyiv) of each day in
+ * [from, to], never before `now`.
+ */
+export function freeWindows(busy: { start: string; end: string }[], from: number, to: number, minutes: number, now = Date.now()): { start: number; end: number }[] {
+  const taken = busy.map((b) => [Date.parse(b.start), Date.parse(b.end)] as const).filter(([s, e]) => e > s).sort((x, y) => x[0] - y[0]);
+  const out: { start: number; end: number }[] = [];
+  if (!(to > from)) return out;
+  for (let day = from; day < to + DAY; day += DAY) {
+    const p = kyivParts(new Date(day));
+    const open = Math.max(kyivLocalToDate(p.year, p.month, p.day, 9).getTime(), from, now);
+    const close = Math.min(kyivLocalToDate(p.year, p.month, p.day, 19).getTime(), to);
+    let cursor = open;
+    for (const [s, e] of taken) {
+      if (e <= cursor || s >= close) continue;
+      if (s - cursor >= minutes * MINUTE) out.push({ start: cursor, end: s });
+      cursor = Math.max(cursor, e);
+    }
+    if (close - cursor >= minutes * MINUTE) out.push({ start: cursor, end: close });
+  }
+  // A day counted twice (from/to inside one day) gives the same windows twice: keep each once.
+  return out.filter((w, i) => out.findIndex((x) => x.start === w.start) === i);
+}
+
 export function calendarTools(env: Env, ownerEmail: string | null, opts: { currentText?: string } = {}): Tool[] {
   const cal = new Calendar(env);
   let deleted = 0;
@@ -147,11 +172,19 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
       spec: {
         name: "check_free_busy",
         description:
-          "Check free/busy status for a time range. Use when user asks 'Am I free at...?' or before creating a meeting to check for conflicts. Required params: timeMin and timeMax in " + ISO + ".",
-        parameters: object({ timeMin: s("Start of time range to check"), timeMax: s("End of time range to check") }, ["timeMin", "timeMax"]),
+          "Check the owner's busy times and free windows for a time range. Use when user asks 'Am I free at...?', to suggest times when none was given, or before creating a meeting to check for conflicts. Required params: timeMin and timeMax in " + ISO + ". Optional: durationMinutes — free windows at least this long (default 30). Free windows are within 09:00–19:00 Kyiv time, never in the past.",
+        parameters: object(
+          { timeMin: s("Start of time range to check"), timeMax: s("End of time range to check"), durationMinutes: { type: "integer", description: "Meeting length, minutes" } },
+          ["timeMin", "timeMax"],
+        ),
       },
       async run(a) {
-        return { busy: await cal.freeBusy(str(a, "timeMin"), str(a, "timeMax")) };
+        const busy = await cal.freeBusy(str(a, "timeMin"), str(a, "timeMax"));
+        const free = freeWindows(busy, Date.parse(str(a, "timeMin")), Date.parse(str(a, "timeMax")), Number(a.durationMinutes) || 30);
+        return {
+          busy: busy.map((b) => ({ start: b.start, end: b.end })),
+          free: free.map((w) => ({ day: new Date(w.start).toISOString().slice(0, 10), from: formatTime(new Date(w.start)), to: formatTime(new Date(w.end)), start: new Date(w.start).toISOString() })),
+        };
       },
     },
     {

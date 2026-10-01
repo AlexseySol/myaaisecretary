@@ -20,6 +20,8 @@ export interface GEvent {
   /** The owner's own notifications for this event (per user: guests are not affected). */
   reminders?: { useDefault?: boolean; overrides?: { method: string; minutes: number }[] };
   status?: "confirmed" | "tentative" | "cancelled";
+  /** «transparent» = the event does not block time (shown as «free»). */
+  transparency?: "opaque" | "transparent";
   summary?: string;
   description?: string;
   location?: string;
@@ -162,13 +164,32 @@ export class Calendar {
     await this.request<void>(`${this.base}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: "DELETE" });
   }
 
-  /** Busy intervals of the primary calendar in [timeMin, timeMax]. */
+  /**
+   * Busy intervals of the primary calendar in [timeMin, timeMax], read from its events. Google's own /freeBusy needs a
+   * scope the bot does not ask for (calendar.freebusy / calendar.readonly) and answers 403 with calendar.events; the
+   * events give the same answer: timed events that are not cancelled, not «free» (transparent) and not declined.
+   */
   async freeBusy(timeMin: string, timeMax: string): Promise<{ start: string; end: string }[]> {
-    const res = await this.request<{ calendars?: Record<string, { busy?: { start: string; end: string }[] }> }>("/freeBusy", {
-      method: "POST",
-      body: JSON.stringify({ timeMin, timeMax, timeZone: "Europe/Kyiv", items: [{ id: "primary" }] }),
-    });
-    return res.calendars?.primary?.busy ?? [];
+    const busy: { start: string; end: string }[] = [];
+    let pageToken: string | undefined;
+    do {
+      const page = await this.listEvents({
+        singleEvents: "true",
+        orderBy: "startTime",
+        timeMin,
+        timeMax,
+        maxResults: "250",
+        ...(pageToken ? { pageToken } : {}),
+      });
+      for (const ev of page.items) {
+        if (ev.status === "cancelled" || ev.transparency === "transparent") continue;
+        if (!ev.start?.dateTime || !ev.end?.dateTime) continue;
+        if (ev.attendees?.find((a) => a.self)?.responseStatus === "declined") continue;
+        busy.push({ start: ev.start.dateTime, end: ev.end.dateTime });
+      }
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+    return busy;
   }
 
   listEvents(params: Record<string, string>): Promise<GEventList> {

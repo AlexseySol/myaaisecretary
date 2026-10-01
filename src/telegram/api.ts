@@ -135,17 +135,42 @@ export const MESSAGE_LIMIT = 4000;
 /** Pieces of at most MESSAGE_LIMIT, cut at a blank line, else at a line end, else anywhere. */
 export function splitMessage(html: string, limit = MESSAGE_LIMIT): string[] {
   const parts: string[] = [];
+  // Room for the tags closed at the end of a part and reopened at the start of the next one.
+  const room = limit - 200;
   let rest = html;
-  while (rest.length > limit) {
-    const window = rest.slice(0, limit);
+  let carry = "";
+  while (carry.length + rest.length > limit) {
+    const window = rest.slice(0, room - carry.length);
     let cut = window.lastIndexOf("\n\n");
-    if (cut < limit / 2) cut = window.lastIndexOf("\n");
-    if (cut < limit / 2) cut = limit;
-    parts.push(rest.slice(0, cut).trimEnd());
+    if (cut < window.length / 2) cut = window.lastIndexOf("\n");
+    if (cut < window.length / 2) cut = window.length;
+    // Never inside a tag or an entity.
+    const lt = window.lastIndexOf("<", cut);
+    if (lt > window.lastIndexOf(">", cut - 1)) cut = lt;
+    const amp = window.lastIndexOf("&", cut - 1);
+    if (amp >= 0 && !window.slice(amp, cut).includes(";")) cut = amp;
+    const piece = carry + rest.slice(0, cut).trimEnd();
+    // A tag open at the cut is closed here and opened again in the next part, so each part is valid HTML.
+    const open = openTags(piece);
+    parts.push(piece + open.map((t) => `</${t.name}>`).reverse().join(""));
+    carry = open.map((t) => t.tag).join("");
     rest = rest.slice(cut).replace(/^\n+/, "");
   }
-  parts.push(rest);
+  parts.push(carry + rest);
   return parts;
+}
+
+/** Tags left open at the end of an HTML piece, outermost first, with their full opening tag. */
+function openTags(html: string): { name: string; tag: string }[] {
+  const stack: { name: string; tag: string }[] = [];
+  for (const m of html.matchAll(/<(\/?)([a-zA-Z][a-zA-Z0-9-]*)[^>]*>/g)) {
+    const name = m[2]!.toLowerCase();
+    if (m[1]) {
+      const at = stack.map((t) => t.name).lastIndexOf(name);
+      if (at >= 0) stack.splice(at, 1);
+    } else stack.push({ name, tag: m[0] });
+  }
+  return stack;
 }
 
 const stripHtml = (html: string) =>
