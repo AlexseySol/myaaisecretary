@@ -66,6 +66,21 @@ export function plainText(text: string | undefined): string {
     .trim();
 }
 
+/** Bitrix24's page size. */
+const PAGE = 50;
+
+/** Parameters as PHP reads them (`filter[REAL_STATUS][0]=2`), for the commands of a batch request. */
+export function phpQuery(value: unknown, prefix = ""): string {
+  const parts: string[] = [];
+  const walk = (v: unknown, key: string) => {
+    if (v === null || v === undefined) return;
+    if (typeof v === "object") for (const [k, x] of Object.entries(v as Record<string, unknown>)) walk(x, key ? `${key}[${k}]` : k);
+    else parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`);
+  };
+  walk(value, prefix);
+  return parts.join("&");
+}
+
 let peopleCache: { at: number; list: Person[] } | null = null;
 let meCache: Person | null = null;
 const stagesCache = new Map<string, Record<string, string>>();
@@ -101,10 +116,16 @@ export class Bitrix {
   async batch<T>(commands: Record<string, string>): Promise<Record<string, T>> {
     const out: Record<string, T> = {};
     const keys = Object.keys(commands);
-    for (let i = 0; i < keys.length; i += 50) {
-      const cmd = Object.fromEntries(keys.slice(i, i + 50).map((k) => [k, commands[k]!]));
-      const { result } = await this.call<{ result: Record<string, T> }>("batch", { halt: 0, cmd });
-      Object.assign(out, result.result ?? {});
+    const chunks: string[][] = [];
+    for (let i = 0; i < keys.length; i += 50) chunks.push(keys.slice(i, i + 50));
+    // Three requests at a time: faster for big reports, still within the portal's rate limit.
+    for (let i = 0; i < chunks.length; i += 3) {
+      const results = await Promise.all(
+        chunks.slice(i, i + 3).map((chunk) =>
+          this.call<{ result: Record<string, T> }>("batch", { halt: 0, cmd: Object.fromEntries(chunk.map((k) => [k, commands[k]!])) }),
+        ),
+      );
+      for (const { result } of results) Object.assign(out, result.result ?? {});
     }
     return out;
   }
@@ -142,15 +163,28 @@ export class Bitrix {
     return p ? fullName(p) : `#${id}`;
   }
 
-  /** Tasks by a Bitrix24 filter (tasks.task.list), up to `limit`. */
+  /** One page of tasks (50, Bitrix24's page) and how many match in all. */
+  async tasksPage(filter: Record<string, unknown>, start = 0, order: Record<string, string> = { DEADLINE: "asc" }): Promise<{ tasks: BxTask[]; total: number }> {
+    const { result, total } = await this.call<{ tasks: BxTask[] }>("tasks.task.list", { filter, select: TASK_FIELDS, order, start });
+    const tasks = result.tasks ?? [];
+    return { tasks, total: total ?? start + tasks.length };
+  }
+
+  /**
+   * Tasks by a Bitrix24 filter, up to `limit`: the first page tells how many there are, the rest come in ONE batch
+   * request (50 pages = 2 500 tasks per request) — fast enough for a 60-second function.
+   */
   async tasks(filter: Record<string, unknown>, limit = 50, order: Record<string, string> = { DEADLINE: "asc" }): Promise<BxTask[]> {
-    const out: BxTask[] = [];
-    let start = 0;
-    while (out.length < limit) {
-      const { result, next } = await this.call<{ tasks: BxTask[] }>("tasks.task.list", { filter, select: TASK_FIELDS, order, start });
-      out.push(...(result.tasks ?? []));
-      if (!next) break;
-      start = next;
+    const first = await this.tasksPage(filter, 0, order);
+    const out = [...first.tasks];
+    const want = Math.min(first.total, limit);
+    if (out.length && out.length < want) {
+      const starts: number[] = [];
+      for (let at = out.length; at < want; at += PAGE) starts.push(at);
+      const pages = await this.batch<{ tasks?: BxTask[] }>(
+        Object.fromEntries(starts.map((at) => [`p${at}`, `tasks.task.list?${phpQuery({ filter, select: TASK_FIELDS, order, start: at })}`])),
+      );
+      for (const at of starts) out.push(...(pages[`p${at}`]?.tasks ?? []));
     }
     return out.slice(0, limit);
   }

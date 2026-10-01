@@ -250,11 +250,49 @@ describe("the task chat («Чат завдання») of new Bitrix24 task cards
     mockFetch([bitrixRoute()]);
     const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
     const tool = bitrixTools(env).find((t) => t.spec.name === "get_task_comments")!;
-    const out = (await tool.run({ taskId: 124 })) as { author: string; text: string }[];
-    expect(out).toEqual([
+    const out = (await tool.run({ taskId: 124 })) as { total: number; messages: { author: string; text: string }[] };
+    expect(out.total).toBe(2);
+    expect(out.messages).toEqual([
       expect.objectContaining({ author: "Система", text: "Задачу взято в роботу" }),
       expect.objectContaining({ author: "Олена Коваль", text: "Постачальник надіслав правки, узгоджую з юристом" }),
     ]);
+    // Older ones on request.
+    const latest = (await tool.run({ taskId: 124, limit: 1 })) as { messages: { text: string }[]; older?: number };
+    expect(latest.messages.map((m) => m.text)).toEqual(["Постачальник надіслав правки, узгоджую з юристом"]);
+    expect(latest.older).toBe(1);
+    expect(((await tool.run({ taskId: 124, limit: 1, skip: 1 })) as { messages: { text: string }[] }).messages.map((m) => m.text)).toEqual(["Задачу взято в роботу"]);
+  });
+
+  it("many tasks: the first page tells the total, the rest come in one batch request", async () => {
+    const { Bitrix, phpQuery } = await import("../src/bitrix/client");
+    const all = Array.from({ length: 120 }, (_, i) => ({ id: String(i + 1), title: `T${i + 1}`, status: "2" }));
+    const batches: string[][] = [];
+    mockFetch([
+      (url, init) => {
+        if (!url.href.startsWith(WEBHOOK)) return undefined;
+        const method = url.pathname.split("/").at(-1)!.replace(/\.json$/, "");
+        const body = JSON.parse(init.bodyText || "{}");
+        if (method === "tasks.task.list") return Response.json({ result: { tasks: all.slice(0, 50) }, next: 50, total: 120 });
+        if (method === "batch") {
+          const cmd = body.cmd as Record<string, string>;
+          batches.push(Object.values(cmd));
+          return Response.json({
+            result: { result: Object.fromEntries(Object.entries(cmd).map(([k, c]) => {
+              const start = Number(/start=(\d+)/.exec(c)![1]);
+              return [k, { tasks: all.slice(start, start + 50) }];
+            })) },
+          });
+        }
+        return undefined;
+      },
+    ]);
+    const bx = new Bitrix({ BITRIX_WEBHOOK_URL: WEBHOOK });
+    const tasks = await bx.tasks({ MEMBER: 1, REAL_STATUS: ["2", "3"] }, 1000);
+    expect(tasks).toHaveLength(120);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+    expect(batches[0]![0]).toContain(phpQuery({ filter: { REAL_STATUS: ["2", "3"] } }).split("&")[0]);
+    expect(phpQuery({ filter: { "<DEADLINE": "x", REAL_STATUS: ["2"] } })).toBe("filter%5B%3CDEADLINE%5D=x&filter%5BREAL_STATUS%5D%5B0%5D=2");
   });
 
   it("a comment goes into the task chat when the task has one, else as an old-style comment", async () => {

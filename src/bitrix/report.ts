@@ -11,9 +11,19 @@ import { isOverdue, kyivDateTime, projectName } from "./format";
  * responsible, creator, dates and link; plus an analytics sheet. Read-only: nothing in Bitrix24 changes.
  */
 
-const MAX_TASKS = 150;
+/** Tasks in the report: up to this many open and closed ones (tasks come fast, 2 500 per Bitrix24 batch request). */
+const MAX_TASKS = 1000;
+const MAX_CLOSED = 300;
 /** Tasks summarised by AI per model call; the calls run in parallel. */
 const AI_CHUNK = 12;
+/** Tasks whose discussion is read per round (3 batch requests each). */
+const COMMENT_ROUND = 150;
+/**
+ * The whole report must fit Vercel's 60 seconds. Discussions are read, most important tasks first, until this point;
+ * the AI summaries get until the next one; then the file is built and sent, whatever was not reached is marked so.
+ */
+const COMMENTS_UNTIL_MS = 25_000;
+const AI_UNTIL_MS = 45_000;
 
 /** What the Excel report can hold — the owner picks it in /bitrix → «📊 Excel-звіт». */
 export const REPORT_SCOPES = {
@@ -34,8 +44,10 @@ export interface TaskReport {
 }
 
 /** "Стан за коментарями" for many tasks: one short line each, from the latest comments. */
-async function statusFromComments(env: Env, tasks: BxTask[], comments: Record<string, BxComment[]>): Promise<Record<string, string>> {
+async function statusFromComments(env: Env, tasks: BxTask[], comments: Record<string, BxComment[]>, until = Infinity): Promise<Record<string, string>> {
   const withComments = tasks.filter((t) => comments[t.id]?.length);
+  const timeLeft = until - Date.now();
+  if (timeLeft <= 1000) return {};
   const chunks: BxTask[][] = [];
   for (let i = 0; i < withComments.length; i += AI_CHUNK) chunks.push(withComments.slice(i, i + AI_CHUNK));
   const results = await Promise.all(
@@ -48,7 +60,7 @@ async function statusFromComments(env: Env, tasks: BxTask[], comments: Record<st
         comments: (comments[t.id] ?? []).slice(-8).map((c) => `${kyivDateTime(c.date)} ${c.authorName}: ${c.text.slice(0, 400)}`),
       }));
       try {
-        const out = (await chatJson(env, env.AGENT_MODEL, [
+        const out = (await withDeadline(timeLeft, chatJson(env, env.AGENT_MODEL, [
           {
             role: "system",
             content:
@@ -57,7 +69,7 @@ async function statusFromComments(env: Env, tasks: BxTask[], comments: Record<st
               'незрозуміло — так і напиши. Відповідь — JSON-обʼєкт {"<id>": "<стан>"}.',
           },
           { role: "user", content: JSON.stringify(input) },
-        ])) as Record<string, unknown>;
+        ]))) as Record<string, unknown>;
         return Object.fromEntries(Object.entries(out ?? {}).map(([k, v]) => [String(k), String(v ?? "")]));
       } catch {
         return {};
@@ -69,8 +81,27 @@ async function statusFromComments(env: Env, tasks: BxTask[], comments: Record<st
 
 const OPEN = ["1", "2", "3", "4", "6"];
 
+/** A promise that gives up after `ms` (the model's answer comes too late for this report). */
+function withDeadline<T>(ms: number, work: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("deadline")), ms);
+    work.then(
+      (v) => (clearTimeout(timer), resolve(v)),
+      (e) => (clearTimeout(timer), reject(e)),
+    );
+  });
+}
+
+/** Most important first: overdue, then by the nearest deadline, then the rest; closed ones last. */
+function byImportance(tasks: BxTask[], now: number): BxTask[] {
+  const rank = (t: BxTask) => (CLOSED.has(String(t.status)) ? 3 : isOverdue(t, now) ? 0 : t.deadline ? 1 : 2);
+  const due = (t: BxTask) => (t.deadline ? Date.parse(t.deadline) : Infinity);
+  return [...tasks].sort((a, b) => rank(a) - rank(b) || due(a) - due(b));
+}
+
 /** The report of the chosen tasks; null when there are none. */
 export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportScope = "all"): Promise<TaskReport | null> {
+  const began = Date.now();
   const bx = new Bitrix(env);
   const me = await bx.me();
   const iso = (t: number) => new Date(t).toISOString();
@@ -87,16 +118,25 @@ export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportS
   const active = scope === "closed" ? [] : await bx.tasks(openFilter, MAX_TASKS);
   const closed =
     scope === "all" || scope === "closed"
-      ? await bx.tasks({ MEMBER: me.id, REAL_STATUS: ["5"], ">=CLOSED_DATE": iso(now - 30 * 86_400_000) }, 50, { CLOSED_DATE: "desc" })
+      ? await bx.tasks({ MEMBER: me.id, REAL_STATUS: ["5"], ">=CLOSED_DATE": iso(now - 30 * 86_400_000) }, MAX_CLOSED, { CLOSED_DATE: "desc" })
       : [];
   const tasks = [...active, ...closed];
   if (!tasks.length) return null;
-  const comments = tasks.length ? await bx.commentsOf(tasks.map((t) => t.id)) : {};
+  // Discussions, most important tasks first, while there is time.
+  const comments: Record<string, BxComment[]> = {};
+  const ordered = byImportance(tasks, now);
+  let read = 0;
+  while (read < ordered.length && Date.now() - began < COMMENTS_UNTIL_MS) {
+    Object.assign(comments, await bx.commentsOf(ordered.slice(read, read + COMMENT_ROUND).map((t) => t.id)));
+    read += COMMENT_ROUND;
+  }
   const stages: Record<string, Record<string, string>> = {};
   for (const g of [...new Set(tasks.filter((t) => t.stageId && t.stageId !== "0").map((t) => t.groupId ?? "0"))].slice(0, 20)) {
     stages[g] = await bx.stageNames(g);
   }
-  const state = await statusFromComments(env, tasks, comments);
+  const state = await statusFromComments(env, ordered.slice(0, read), comments, began + AI_UNTIL_MS);
+  const analysed = Object.keys(state).length;
+  const discussed = ordered.slice(0, read).filter((t) => comments[t.id]?.length).length;
   const name = async (t: BxTask, who: "responsible" | "creator") =>
     who === "responsible" ? t.responsible?.name || (await bx.personName(t.responsibleId)) : t.creator?.name || (await bx.personName(t.createdBy));
 
@@ -116,7 +156,7 @@ export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportS
       projectName(t),
       t.stageId && t.stageId !== "0" ? (stages[t.groupId ?? "0"]?.[String(t.stageId)] ?? "") : "",
       STATUS[String(t.status)] ?? String(t.status),
-      state[t.id] || (comments[t.id]?.length ? "" : "Коментарів немає"),
+      state[t.id] || (!(t.id in comments) ? "Не встиг прочитати (задач багато)" : comments[t.id]!.length ? "" : "Коментарів немає"),
       await name(t, "responsible"),
       await name(t, "creator"),
       kyivDateTime(t.createdDate, false),
@@ -173,6 +213,9 @@ export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportS
       `📊 <b>Звіт по задачах Bitrix24</b>\n${REPORT_SCOPES[scope]}\n\n` +
       `📋 Відкрито: <b>${openTasks.length}</b> · 🔥 прострочено: <b>${overdueCount}</b>\n` +
       `✅ Закрито за 30 днів: <b>${closed.length}</b>${avg !== "" ? ` · ⏱ в середньому ${avg} дн.` : ""}\n\n` +
-      `<i>Прострочені задачі підсвічено червоним. «Стан за коментарями» — коротко з переписки в задачі.</i>`,
+      `<i>Прострочені задачі підсвічено червоним. «Стан за коментарями» — коротко з переписки в задачі.</i>` +
+      (analysed < discussed || read < tasks.length
+        ? `\n<i>Задач багато: стан за коментарями — для ${analysed} найважливіших (прострочені й найближчі дедлайни) з ${tasks.length}. Для решти — звузьте звіт (прострочені, цей тиждень, мої).</i>`
+        : ""),
   };
 }
