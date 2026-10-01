@@ -286,7 +286,7 @@ describe("push channel without stored state", () => {
     expect((await dailyCron(new Request("https://bot.test/api/cron/daily"), env)).status).toBe(401);
     const res = await dailyCron(new Request("https://bot.test/api/cron/daily", { headers: { authorization: "Bearer cron-secret" } }), env);
     expect(res.status).toBe(200);
-    expect(jobs.map((j) => j.body)).toEqual([{ type: "daily" }]);
+    expect(jobs.map((j) => j.body)).toEqual([{ type: "morning" }, { type: "daily" }]);
   });
 });
 

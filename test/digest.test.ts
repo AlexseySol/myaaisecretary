@@ -115,6 +115,52 @@ describe("the report's safety net", () => {
     expect(await sendDueDigest(env, NOW - 10 * 60_000)).toBe(false);
   });
 
+  it("the daily cron sends it when Google does not wake the bot, or when yesterday's signal never brought the report", async () => {
+    const { sendMorningFallback } = await import("../src/google/digest");
+    const { shadowId } = await import("../src/google/signals");
+    const CRON = Date.parse("2026-10-01T04:45:00Z"); // 07:45 Kyiv; the report is set for 09:00
+    const setup = async (yesterdaySent: boolean) => {
+      resetInstance();
+      await connectGoogle();
+      const signals: Record<string, Record<string, unknown>> = {
+        [shadowId("digest:2026-09-30")]: { id: shadowId("digest:2026-09-30"), etag: '"1"', status: "confirmed", extendedProperties: { private: { aisFor: "digest:2026-09-30", ...(yesterdaySent ? { aisSent: "1" } : {}) } } },
+        [shadowId("digest:2026-10-01")]: { id: shadowId("digest:2026-10-01"), etag: '"1"', status: "confirmed", extendedProperties: { private: { aisFor: "digest:2026-10-01" } } },
+      };
+      const calls = mockFetch([
+        (url, init) => {
+          if (url.hostname !== "www.googleapis.com" || !url.pathname.includes("/calendar/")) return undefined;
+          const path = decodeURIComponent(url.pathname);
+          const sig = /\/sig@x\/events\/([^/]+)$/.exec(path);
+          if (sig) {
+            const ev = signals[sig[1]!];
+            if (!ev) return Response.json({ error: { code: 404 } }, { status: 404 });
+            if (init.method === "PATCH") ev.extendedProperties = JSON.parse(init.bodyText).extendedProperties;
+            return Response.json(ev);
+          }
+          return Response.json({ items: [] });
+        },
+      ]);
+      return { calls, env: testEnv().env };
+    };
+
+    // Google wakes the bot and yesterday's report went: today's waits for 09:00.
+    let { calls, env } = await setup(true);
+    await saveOwnerSettings(env, { p: "ok", sc: "sig@x", dg: { t: 540, b: ["empty"] } });
+    expect(await sendMorningFallback(env, CRON)).toBe(false);
+    expect(tgCalls(calls, "sendMessage")).toHaveLength(0);
+
+    // Yesterday's signal never brought the report: today's comes now instead of never.
+    ({ calls, env } = await setup(false));
+    await saveOwnerSettings(env, { p: "ok", sc: "sig@x", dg: { t: 540, b: ["empty"] } });
+    expect(await sendMorningFallback(env, CRON)).toBe(true);
+    expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("Доброго ранку");
+
+    // Google does not wake the bot: the cron is the clock.
+    ({ calls, env } = await setup(true));
+    await saveOwnerSettings(env, { dg: { t: 540, b: ["empty"] } });
+    expect(await sendMorningFallback(env, CRON)).toBe(true);
+  });
+
   it("a day without meetings still gets its report by default", async () => {
     await connectGoogle();
     mockFetch([(url) => (url.hostname === "www.googleapis.com" && url.pathname.includes("/calendar/") ? Response.json({ items: [] }) : undefined)]);

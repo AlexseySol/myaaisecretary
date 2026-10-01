@@ -277,6 +277,28 @@ export async function sendDueDigest(env: Env, now = Date.now()): Promise<boolean
   return sendDigestOnce(env, key, now);
 }
 
+/**
+ * The daily cron's part (Vercel runs it once a day, 7:45 Kyiv in summer): the clock of last resort. It sends today's
+ * report when Google does not wake the bot, when the report's time has already passed, and when yesterday's report never
+ * went (Google's signal did not reach the bot) — then today's comes now instead of never. Sent once per day whichever
+ * way came first (sendDigestOnce).
+ */
+export async function sendMorningFallback(env: Env, now = Date.now()): Promise<boolean> {
+  const choice = await loadDigestChoice(env);
+  if (!choice.on) return false;
+  const { key, start } = todays(choice, now);
+  if (!(await digestByGoogle(env)) || now >= start || (await missedYesterday(env, choice, now))) return sendDigestOnce(env, key, now);
+  return false;
+}
+
+/** Yesterday's report signal is there but the report never went out. */
+async function missedYesterday(env: Env, choice: DigestChoice, now: number): Promise<boolean> {
+  const sc = (await loadOwnerSettings(env).catch((): OwnerSettings => ({}))).sc;
+  if (!sc) return false;
+  const ev = await new Calendar(env, sc).getEvent(shadowId(todays(choice, now - DAY).key)).catch(() => null);
+  return !!ev && ev.status !== "cancelled" && !ev.extendedProperties?.private?.aisSent;
+}
+
 /** For /settings → ☀️: when the next report comes, and whether today's already went. */
 export async function digestStatus(env: Env, now = Date.now()): Promise<string> {
   const choice = await loadDigestChoice(env);

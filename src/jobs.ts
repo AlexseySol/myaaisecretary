@@ -1,13 +1,12 @@
 import { type AgentInput, handleWithAgents } from "./agent";
 import { type BitrixAction, runBitrixAction } from "./bitrix/menu";
 import { helpText } from "./bot/onboarding";
-import { digestEnabled } from "./bot/settings";
 import { type Env, gmailPushConfigured } from "./env";
 import { gmailSync } from "./google/gmailPush";
 import { reportWake, setupGoogleWake } from "./google/wake";
 import { connectLink, forgetGoogleAuth, GoogleAuthRevokedError, hasGmailScope, hasGoogleAuth } from "./google/oauth";
 import { announceUpdate } from "./bot/news";
-import { digestByGoogle, sendDigest, sendDueDigest } from "./google/digest";
+import { sendDigest, sendDueDigest, sendMorningFallback } from "./google/digest";
 import { sendReminders } from "./google/reminders";
 import { markUpcoming, startWatch, syncRecent } from "./google/sync";
 import { bytesToBase64 } from "./lib/crypto";
@@ -34,8 +33,10 @@ export type Job =
   | { type: "sync" }
   /** Right after Google is connected: push channel, remember upcoming events, Gmail watch, greet. */
   | { type: "connected"; gmail: boolean }
-  /** Daily: morning digest, renew the push channels, remember newly added events. */
+  /** Daily: renew the push channels, remember newly added events. */
   | { type: "daily" }
+  /** Daily, alongside: the morning report if Google's signal does not bring it (google/digest.ts sendMorningFallback). */
+  | { type: "morning" }
   /** Report emails that arrived since the last Gmail push. */
   | { type: "gmail_sync" }
   /** Telegram reminders shortly before meetings (/api/cron/reminders). */
@@ -138,16 +139,26 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       await new Telegram(env).send(env.OWNER_TELEGRAM_ID, `✅ Google підключено. Подій на найближчі 30 днів: ${count}.\n\n${helpText()}`);
       return;
     }
-    case "daily":
+    case "daily": {
       if (!(await hasGoogleAuth(env))) return void (await announceUpdate(env).catch((err) => logError(env, "news", err)));
-      await startWatch(env);
-      await markUpcoming(env);
+      // Each step on its own: one failing (or slow) must not take the others with it.
+      // A revoked Google grant still stops the job: the owner is asked to reconnect.
+      const step = (name: string, run: () => Promise<unknown>) =>
+        run().catch((err) => {
+          if (err instanceof GoogleAuthRevokedError) throw err;
+          return logError(env, name, err);
+        });
+      await step("gcal.watch", () => startWatch(env));
+      await step("gcal.mark", () => markUpcoming(env));
       // A Gmail watch lapses after 7 days; renewing daily keeps mail and reminders flowing, and new meetings of the
       // coming week get their reminder emails (and the morning report its signal for tomorrow).
-      await setupGoogleWake(env).catch((err) => logError(env, "google.wake", err));
-      // The morning report comes at the owner's time through Google; this run is the fallback until Google wakes the bot.
-      if ((await digestEnabled(env)) && !(await digestByGoogle(env))) await sendDigest(env).catch((err) => logError(env, "digest", err));
-      await announceUpdate(env).catch((err) => logError(env, "news", err));
+      await step("google.wake", () => setupGoogleWake(env));
+      await step("news", () => announceUpdate(env));
+      return;
+    }
+    case "morning":
+      // Its own job, started with the daily one: the report never waits behind the renewals above.
+      if (await hasGoogleAuth(env)) await sendMorningFallback(env);
       return;
     case "news":
       await announceUpdate(env);

@@ -60,7 +60,8 @@ webhook and redirects to the bot; `/api/health` shows the state.
   windows plus the blocks ticked in /settings → ☀️ — invitations with ✅/❌, mail, AI mail summary, Bitrix24, tomorrow; at
   the owner's time via a `digest:` signal in the signal calendar; `sendDigestOnce` claims the day's signal (`aisSent`) so it
   goes once; `sendDueDigest` — any wake-up up to 3 h after the time sends it if Google's signal did not; the daily cron
-  only while Google does not wake the bot),
+  (`sendMorningFallback`, its own `morning` job next to `daily`) when Google does not wake the bot, the time has passed,
+  or yesterday's signal never brought the report),
   Gmail API + Pub/Sub push (`gmailPush.ts`: n8n WF3 "📧 Нова пошта!" format).
 - Meeting reminders use Google as the clock — no cron, no outside service (the owner forbade both). Each chosen time
   gives BOTH a Telegram message and a Google Calendar notification (always both — the owner asked for no channel buttons):

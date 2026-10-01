@@ -198,6 +198,8 @@ export async function dailyCron(req: Request, env: Env): Promise<Response> {
   if (env.CRON_SECRET && !safeEqual(req.headers.get("authorization"), `Bearer ${env.CRON_SECRET}`)) {
     return new Response("unauthorized", { status: 401 });
   }
+  // The report first and on its own, so the slower renewals cannot hold it up.
+  await env.jobs.send({ type: "morning" });
   await env.jobs.send({ type: "daily" });
   return Response.json({ ok: true });
 }
