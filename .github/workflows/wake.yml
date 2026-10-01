@@ -28,14 +28,19 @@ jobs:
           candidates="$BOT_URL"
           [ -n "$project" ] && candidates="$candidates https://$project-$team.vercel.app https://$project.vercel.app"
           candidates="$candidates https://$host"
-          for url in $candidates; do
-            url="${url%/}"
-            health=$(curl -sS --max-time 30 "$url/api/health" || true)
-            if printf '%s' "$health" | grep -q "\"commit\":\"$SHA\""; then
-              code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 60 "$url/api/setup" || echo "000")
-              echo "$url: woken ($code)"
-              exit 0
-            fi
-            echo "$url: not this bot or not this version"
+          # The production address may move to the new version a few seconds after the report: try for two minutes.
+          for attempt in $(seq 1 12); do
+            for url in $candidates; do
+              url="${url%/}"
+              health=$(curl -sS --max-time 20 -w '\n%{http_code}' "$url/api/health" 2>&1 || true)
+              code=$(printf '%s' "$health" | tail -n 1)
+              if printf '%s' "$health" | grep -q "\"commit\":\"$SHA\""; then
+                setup=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 60 "$url/api/setup" || echo "000")
+                echo "$url: woken ($setup)"
+                exit 0
+              fi
+              echo "try $attempt — $url: HTTP $code, $(printf '%s' "$health" | head -n 1 | grep -o '"commit":"[0-9a-f]\{7\}' || echo 'no commit')"
+            done
+            sleep 10
           done
           echo "Could not reach the bot; it tells what is new at its next wake-up instead"
