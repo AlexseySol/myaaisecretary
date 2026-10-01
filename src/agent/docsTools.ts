@@ -1,6 +1,6 @@
 import type { Env } from "../env";
-import { MAX_TEXT } from "../lib/parse";
-import { type DriveFile, MIME, Workspace } from "../google/workspace";
+import { textPart } from "../lib/parse";
+import { type DriveFile, type FilePage, MIME, Workspace } from "../google/workspace";
 import { fileText } from "./files";
 import { str, type Tool } from "./runner";
 
@@ -21,7 +21,11 @@ function brief(f: DriveFile): Record<string, unknown> {
 }
 
 const rowsOf = (v: unknown): string[][] => (Array.isArray(v) ? v.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? "")) : [String(r ?? "")])) : []);
-const cut = (t: string) => (t.length > MAX_TEXT ? `${t.slice(0, MAX_TEXT)}\n…(далі обрізано)` : t);
+const num = (v: unknown) => (typeof v === "number" ? v : Number(v) || 1);
+/** A page of files for the model, with the token for the next page when there is one. */
+const listed = (p: FilePage) => ({ files: p.files.map(brief), ...(p.next ? { nextPage: p.next, note: "Є ще файли. Не гортай усе: покажи найсвіжіші й попроси власника уточнити назву, рік, папку чи тип; page=nextPage — лише на «покажи ще»" } : {}) });
+const PART = { type: "number", description: "Which part of a long text, from 1 (the answer says how many parts there are)" };
+const PAGE_TOKEN = s("nextPage from the previous answer, to get the next files");
 
 export function docsTools(env: Env): Tool[] {
   const ws = new Workspace(env);
@@ -29,38 +33,48 @@ export function docsTools(env: Env): Tool[] {
     {
       spec: {
         name: "drive_search",
-        description: "Find files on the owner's Google Drive by words in the name or text (newest first).",
+        description: "Find files on the owner's Google Drive by words in the name or text (newest first), 25 at a time; nextPage gives the next ones.",
         parameters: object(
-          { query: s("Words to find; empty for the latest files"), type: { type: "string", enum: ["any", "doc", "sheet", "folder", "slides"], description: "Kind of file" } },
+          {
+            query: s("Words to find; empty for the latest files"),
+            type: { type: "string", enum: ["any", "doc", "sheet", "folder", "slides"], description: "Kind of file" },
+            page: PAGE_TOKEN,
+          },
           ["query"],
         ),
       },
       async run(a) {
         const type = str(a, "type");
-        return (await ws.search(str(a, "query"), type && type !== "any" ? (type as keyof typeof MIME) : undefined)).map(brief);
+        return listed(await ws.search(str(a, "query"), type && type !== "any" ? (type as keyof typeof MIME) : undefined, str(a, "page") || undefined));
       },
     },
     {
       spec: {
         name: "drive_read",
-        description: "Read a Drive file: a Doc, a Sheet (all tabs), Slides, a folder's contents, or a PDF / Word / Excel file. Question — what to find in it (for a PDF).",
-        parameters: object({ fileId: s("File ID from drive_search"), question: s("What the owner wants to know; empty for the content") }, ["fileId"]),
+        description:
+          "Read a Drive file: a Doc, a Sheet (every tab, every row), Slides, a folder's contents, or a PDF / Word / Excel file. A long text comes in parts — read the next with part; a big folder in pages — the next with page. Question — what to find in it (for a PDF).",
+        parameters: object(
+          { fileId: s("File ID from drive_search"), question: s("What the owner wants to know; empty for the content"), part: PART, page: PAGE_TOKEN },
+          ["fileId"],
+        ),
       },
       async run(a) {
         const f = await ws.file(str(a, "fileId"));
         const head = { ...brief(f) };
-        if (f.mimeType === MIME.folder) return { ...head, files: (await ws.list(f.id)).map(brief) };
-        if (f.mimeType === MIME.doc) return { ...head, text: cut(await ws.export(f.id, "text/plain")) };
-        if (f.mimeType === MIME.slides) return { ...head, text: cut(await ws.export(f.id, "text/plain")) };
+        const part = num(a.part);
+        if (f.mimeType === MIME.folder) return { ...head, ...listed(await ws.list(f.id, str(a, "page") || undefined)) };
+        if (f.mimeType === MIME.doc || f.mimeType === MIME.slides) return { ...head, text: textPart(await ws.export(f.id, "text/plain"), part) };
         if (f.mimeType === MIME.sheet) {
           const info = await ws.sheetTitles(f.id);
+          // Each whole tab (its name as the range = every filled cell).
           const tabs = await Promise.all(
-            info.sheets.slice(0, 5).map(async (t) => `## ${t}\n${(await ws.readRange(f.id, `'${t.replace(/'/g, "''")}'!A1:Z300`)).map((r) => r.join(" | ")).join("\n")}`),
+            info.sheets.map(async (t) => `## ${t}\n${(await ws.readRange(f.id, `'${t.replace(/'/g, "''")}'`)).map((r) => r.join(" | ")).join("\n")}`),
           );
-          return { ...head, sheets: info.sheets, text: cut(tabs.join("\n\n")) };
+          return { ...head, sheets: info.sheets, text: textPart(tabs.join("\n\n"), part) };
         }
+        // A file the model gets whole (a PDF): above this size the request to the model fails anyway.
         if (Number(f.size ?? 0) > 20_000_000) return { ...head, error: "Файл завеликий (понад 20 МБ)." };
-        return { ...head, text: await fileText(env, await ws.download(f.id), f.name, f.mimeType, str(a, "question")) };
+        return { ...head, text: await fileText(env, await ws.download(f.id), f.name, f.mimeType, str(a, "question"), part) };
       },
     },
     {

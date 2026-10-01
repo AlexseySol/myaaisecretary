@@ -12,7 +12,7 @@ import { markUpcoming, startWatch, syncRecent } from "./google/sync";
 import { bytesToBase64 } from "./lib/crypto";
 import { logError } from "./lib/errors";
 import { type ContentPart, pdfPart } from "./llm/openrouter";
-import { parseDocument } from "./lib/parse";
+import { parseDocument, textPart } from "./lib/parse";
 import { applyIntegrations } from "./integrations";
 import { takeBatch } from "./session";
 import { transcribe } from "./stt/transcribe";
@@ -81,7 +81,7 @@ async function documents(env: Env, files: TgDocument[]): Promise<{ text: string;
   for (const f of files) {
     const { bytes } = await tg.download(f.id);
     const parsed = parseDocument(bytes, f.name, f.mime);
-    if (parsed.kind === "text") text += `\n\n[Вміст файлу «${f.name}»]\n${parsed.text}`;
+    if (parsed.kind === "text") text += `\n\n[Вміст файлу «${f.name}»]\n${textPart(parsed.text)}`;
     else if (parsed.kind === "pdf") parts.push(pdfPart(f.name, parsed.base64));
     else text += `\n\n[Файл «${f.name}» — такий формат я не читаю]`;
   }

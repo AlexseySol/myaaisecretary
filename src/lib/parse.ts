@@ -7,8 +7,19 @@ import { unzip } from "./unzip";
 
 export type Parsed = { kind: "text"; text: string } | { kind: "pdf"; base64: string } | { kind: "unknown" };
 
-/** How much of a file's text goes to the model. */
+/** How much of a file's text goes to the model at once; the rest is read part by part (textPart). */
 export const MAX_TEXT = 20_000;
+
+/**
+ * One part of a long text (1-based): nothing is cut off for good — the note at the end says how many parts there are,
+ * and the agent asks for the next one with the tool's part parameter.
+ */
+export function textPart(text: string, part = 1): string {
+  const parts = Math.max(1, Math.ceil(text.length / MAX_TEXT));
+  const n = Math.min(Math.max(1, Math.floor(part) || 1), parts);
+  const chunk = text.slice((n - 1) * MAX_TEXT, n * MAX_TEXT);
+  return parts > 1 ? `${chunk}\n…(частина ${n} з ${parts}${n < parts ? `; далі — part=${n + 1}` : ""})` : chunk;
+}
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 const decodeXml = (s: string) =>
@@ -16,7 +27,6 @@ const decodeXml = (s: string) =>
     e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : (ENTITIES[e] ?? m),
   );
 const utf8 = (b: Uint8Array) => new TextDecoder().decode(b);
-const cut = (s: string) => (s.length > MAX_TEXT ? `${s.slice(0, MAX_TEXT)}\n…(далі обрізано)` : s);
 
 function docx(bytes: Uint8Array): string {
   const xml = utf8(unzip(bytes, (n) => n === "word/document.xml").get("word/document.xml") ?? new Uint8Array());
@@ -74,11 +84,11 @@ export function parseDocument(bytes: Uint8Array, name: string, mime = ""): Parse
   const ext = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase() ?? "";
   try {
     if (ext === "pdf" || mime === "application/pdf") return { kind: "pdf", base64: Buffer.from(bytes).toString("base64") };
-    if (ext === "docx" || mime.includes("wordprocessingml")) return { kind: "text", text: cut(docx(bytes)) };
-    if (ext === "xlsx" || mime.includes("spreadsheetml")) return { kind: "text", text: cut(xlsx(bytes)) };
-    if (ext === "pptx" || mime.includes("presentationml")) return { kind: "text", text: cut(pptx(bytes)) };
-    if (["txt", "csv", "tsv", "md", "json", "xml", "log"].includes(ext) || mime.startsWith("text/")) return { kind: "text", text: cut(utf8(bytes)) };
-    if (ext === "html" || ext === "htm") return { kind: "text", text: cut(decodeXml(utf8(bytes).replace(/<(script|style)[\s\S]*?<\/\1>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " "))) };
+    if (ext === "docx" || mime.includes("wordprocessingml")) return { kind: "text", text: docx(bytes) };
+    if (ext === "xlsx" || mime.includes("spreadsheetml")) return { kind: "text", text: xlsx(bytes) };
+    if (ext === "pptx" || mime.includes("presentationml")) return { kind: "text", text: pptx(bytes) };
+    if (["txt", "csv", "tsv", "md", "json", "xml", "log"].includes(ext) || mime.startsWith("text/")) return { kind: "text", text: utf8(bytes) };
+    if (ext === "html" || ext === "htm") return { kind: "text", text: decodeXml(utf8(bytes).replace(/<(script|style)[\s\S]*?<\/\1>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")) };
   } catch {
     // A broken file reads as unknown.
   }

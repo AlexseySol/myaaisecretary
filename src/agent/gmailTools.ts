@@ -85,22 +85,34 @@ export function gmailTools(env: Env): Tool[] {
       spec: {
         name: "attachment_read",
         description:
-          "Read the attachments of a message (PDF, Word, Excel, PowerPoint, CSV, text): their content, or the answer to Question about them.",
+          "Read the attachments of a message (PDF, Word, Excel, PowerPoint, CSV, text): their content, or the answer to Question about them. Up to 3 files at a time — Name picks one; a long text comes in parts (Part).",
         parameters: object(
-          { MessageId: s("The ID of the message"), Question: s("What the owner wants to know from the files; empty for a summary") },
+          {
+            MessageId: s("The ID of the message"),
+            Question: s("What the owner wants to know from the files; empty for a summary"),
+            Name: s("Only the attachment with this file name (when there are several)"),
+            Part: { type: "number", description: "Which part of a long attachment, from 1" },
+          },
           ["MessageId"],
         ),
       },
       async run(a) {
         const id = str(a, "MessageId");
-        const files = attachments((await get(id)).payload).slice(0, 3);
-        if (!files.length) return { attachments: [] };
-        return Promise.all(
+        const name = str(a, "Name").toLowerCase();
+        const all = attachments((await get(id)).payload);
+        const chosen = name ? all.filter((f) => f.name.toLowerCase().includes(name)) : all;
+        const files = chosen.slice(0, 3);
+        if (!files.length) return { attachments: [], ...(all.length ? { available: all.map((f) => f.name) } : {}) };
+        const read = await Promise.all(
           files.map(async (f) => {
             const { data } = await gmail.call<{ data: string }>(`/messages/${encodeURIComponent(id)}/attachments/${encodeURIComponent(f.id)}`);
-            return { name: f.name, content: await fileText(env, new Uint8Array(Buffer.from(data, "base64url")), f.name, f.mime, str(a, "Question")) };
+            const part = typeof a.Part === "number" ? a.Part : Number(a.Part) || 1;
+            return { name: f.name, content: await fileText(env, new Uint8Array(Buffer.from(data, "base64url")), f.name, f.mime, str(a, "Question"), part) };
           }),
         );
+        // More than 3: the rest by name, so none is out of reach.
+        const rest = chosen.slice(3).map((f) => f.name);
+        return rest.length ? { attachments: read, more: rest, note: "Решту читайте з Name" } : read;
       },
     },
     {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { docsTools } from "../src/agent/docsTools";
 import { routeByKeywords } from "../src/agent/route";
-import { parseDocument } from "../src/lib/parse";
+import { MAX_TEXT, parseDocument, textPart } from "../src/lib/parse";
 import { buildXlsx, zip } from "../src/lib/xlsx";
 import { missingScopes } from "../src/google/oauth";
 import { handleUpdate } from "../src/telegram/handler";
@@ -49,6 +49,45 @@ describe("the Docs Agent never deletes", () => {
   it("asks for the Drive permission when it is missing (exact scope, not the hidden folder one)", () => {
     expect(missingScopes("https://www.googleapis.com/auth/drive.appdata").join(" ")).toContain("документи");
     expect(missingScopes("https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive").join(" ")).not.toContain("документи");
+  });
+});
+
+describe("no file is out of reach: long texts in parts, many files in pages", () => {
+  it("a long text is never cut off for good — each part says how many there are", () => {
+    const text = "а".repeat(MAX_TEXT) + "б".repeat(MAX_TEXT) + "кінець";
+    expect(textPart(text)).toContain("частина 1 з 3; далі — part=2");
+    expect(textPart(text, 3)).toContain("кінець");
+    expect(textPart(text, 3)).toContain("частина 3 з 3)");
+    expect(textPart("коротко")).toBe("коротко");
+  });
+
+  it("Drive search gives the next page's token; a sheet is read whole, every tab", async () => {
+    await connectGoogle();
+    const ranges: string[] = [];
+    mockFetch([
+      (url) => {
+        if (url.hostname === "www.googleapis.com" && url.pathname === "/drive/v3/files") {
+          const second = url.searchParams.get("pageToken") === "p2";
+          return Response.json({ files: [{ id: second ? "f2" : "f1", name: "x", mimeType: "text/plain" }], ...(second ? {} : { nextPageToken: "p2" }) });
+        }
+        if (url.hostname === "www.googleapis.com" && url.pathname === "/drive/v3/files/s1") return Response.json({ id: "s1", name: "Витрати", mimeType: "application/vnd.google-apps.spreadsheet" });
+        if (url.hostname === "sheets.googleapis.com" && url.pathname.endsWith("/s1")) return Response.json({ properties: { title: "Витрати" }, spreadsheetUrl: "u", sheets: ["1", "2", "3", "4", "5", "6"].map((t) => ({ properties: { title: `Аркуш${t}` } })) });
+        if (url.hostname === "sheets.googleapis.com") {
+          ranges.push(decodeURIComponent(url.pathname.split("/values/")[1]!));
+          return Response.json({ values: [["рядок"]] });
+        }
+        return undefined;
+      },
+    ]);
+    const { env } = testEnv();
+    const tools = docsTools(env);
+    const search = tools.find((t) => t.spec.name === "drive_search")!;
+    expect(await search.run({ query: "x" })).toMatchObject({ files: [{ id: "f1" }], nextPage: "p2" });
+    expect(await search.run({ query: "x", page: "p2" })).toEqual({ files: [expect.objectContaining({ id: "f2" })] });
+    const read = tools.find((t) => t.spec.name === "drive_read")!;
+    await read.run({ fileId: "s1" });
+    expect(ranges).toHaveLength(6);
+    expect(ranges[0]).toBe("'Аркуш1'");
   });
 });
 

@@ -33,7 +33,9 @@ webhook and redirects to the bot; `/api/health` shows the state.
   loop over OpenRouter), `prompts.ts` (the n8n prompts), `calendarTools.ts` (the n8n Calendar MCP tools),
   `gmailTools.ts` (the n8n Gmail sub-workflow tools, plus `attachment_read`), `docsTools.ts` (the Docs Agent: Google
   Drive, Sheets, Docs via `google/workspace.ts`, scope `drive` — read, create, append, move, share; NOTHING is ever
-  deleted, trashed or cleared, keep it that way; a file sent in the chat is read even without the scope), `files.ts`
+  deleted, trashed or cleared, keep it that way; a file sent in the chat is read even without the scope; long texts come
+  in 20 000-character parts (`lib/parse.ts` `textPart`, the tools' `part`), searches and folders 25 files a page
+  (`nextPage`); with many matches the agent asks the owner to narrow instead of paging through everything), `files.ts`
   (a file as text for a tool: `lib/parse.ts` reads .docx/.xlsx/.pptx/.csv/text without dependencies via `lib/unzip.ts`;
   a PDF goes to the model as a `file` part with OpenRouter's free pdf-text parser), `memory.ts` (one-session window memory), `html.ts`,
   `route.ts` (the Supervisor's keyword routing table in code: an obvious calendar/mail request, or a reply to the

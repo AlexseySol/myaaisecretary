@@ -29,6 +29,14 @@ export interface DriveFile {
 }
 
 const FIELDS = "id,name,mimeType,modifiedTime,webViewLink,size,parents";
+/** Files per page of a search or a folder; the next page comes with `next`, so nothing is out of reach. */
+const PAGE = 25;
+
+export interface FilePage {
+  files: DriveFile[];
+  /** The next page's token; none when this is the last page. */
+  next?: string;
+}
 
 /** Whether the owner allowed the bot into Drive, Sheets and Docs (the full drive scope, not only its hidden folder). */
 export async function hasWorkspaceScope(env: Env): Promise<boolean> {
@@ -52,20 +60,25 @@ export class Workspace {
     return (await (await this.request(url, init)).json()) as T;
   }
 
-  /** Files whose name or text contains the words (newest first); trashed files are left out. */
-  async search(text: string, type?: keyof typeof MIME, limit = 10): Promise<DriveFile[]> {
+  /** Files whose name or text contains the words (newest first), a page at a time; trashed files are left out. */
+  async search(text: string, type?: keyof typeof MIME, page?: string, limit = PAGE): Promise<FilePage> {
     const q = ["trashed = false"];
     const words = text.replace(/'/g, "\\'").trim();
     if (words) q.push(`(name contains '${words}' or fullText contains '${words}')`);
     if (type) q.push(`mimeType = '${MIME[type]}'`);
-    const params = new URLSearchParams({ q: q.join(" and "), fields: `files(${FIELDS})`, pageSize: String(limit), orderBy: "modifiedTime desc" });
-    return (await this.json<{ files?: DriveFile[] }>(`${DRIVE}?${params}`)).files ?? [];
+    return this.page(q.join(" and "), page, limit);
   }
 
-  /** What a folder holds (newest first). */
-  async list(folder: string, limit = 30): Promise<DriveFile[]> {
-    const params = new URLSearchParams({ q: `'${folder.replace(/'/g, "\\'")}' in parents and trashed = false`, fields: `files(${FIELDS})`, pageSize: String(limit), orderBy: "modifiedTime desc" });
-    return (await this.json<{ files?: DriveFile[] }>(`${DRIVE}?${params}`)).files ?? [];
+  /** What a folder holds (newest first), a page at a time. */
+  async list(folder: string, page?: string, limit = PAGE): Promise<FilePage> {
+    return this.page(`'${folder.replace(/'/g, "\\'")}' in parents and trashed = false`, page, limit);
+  }
+
+  private async page(q: string, page: string | undefined, limit: number): Promise<FilePage> {
+    const params = new URLSearchParams({ q, fields: `nextPageToken,files(${FIELDS})`, pageSize: String(limit), orderBy: "modifiedTime desc" });
+    if (page) params.set("pageToken", page);
+    const r = await this.json<{ files?: DriveFile[]; nextPageToken?: string }>(`${DRIVE}?${params}`);
+    return { files: r.files ?? [], next: r.nextPageToken };
   }
 
   async file(id: string): Promise<DriveFile> {
