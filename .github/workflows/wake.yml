@@ -1,0 +1,27 @@
+name: Wake the bot after a deploy
+
+# Vercel reports every deploy of a Git-connected copy back to GitHub. As soon as a production deploy succeeds, this
+# opens the bot's /api/setup: the new version wakes up at once and tells the owner «🆕 Бот оновлено» — without waiting
+# for the owner's next message. No token, no secret: only a public request to the bot's own address.
+on: deployment_status
+
+permissions: {}
+
+jobs:
+  wake:
+    if: github.event.deployment_status.state == 'success' && startsWith(github.event.deployment.environment, 'Production')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open the bot's /api/setup
+        env:
+          DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          # The deploy's own address may be behind Vercel's login; the project's production address is not.
+          for url in "https://${REPO}.vercel.app" "$DEPLOY_URL"; do
+            [ -z "$url" ] && continue
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 60 "${url%/}/api/setup" || echo "000")
+            echo "$url: $code"
+            case "$code" in 2*|3*) exit 0 ;; esac
+          done
+          echo "Could not reach the bot; it tells what is new at its next wake-up instead"
