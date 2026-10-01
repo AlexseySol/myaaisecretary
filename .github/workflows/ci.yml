@@ -39,7 +39,6 @@ jobs:
           OLD_BOTS: ${{ vars.BOT_URL }}
         run: |
           if [ -z "$DEPLOYS$OLD_HOOKS" ]; then echo "VERCEL_DEPLOY is not set — skipping the deploy"; exit 0; fi
-          [ -n "$DEPLOYS" ] && npm ci --no-audit --no-fund > /dev/null
           wake() {
             # A hook deploys in the background: wait until this commit is live, then open /api/setup.
             for i in $(seq 1 24); do
@@ -56,8 +55,8 @@ jobs:
                 if curl -fsS -o /dev/null -X POST "$first"; then echo "hook: deploy started"; else echo "hook: did not answer"; fi ;;
               *)
                 rm -rf .vercel
-                if npx vercel link --yes --project "$project" --token "$first" > /dev/null 2>&1 \
-                  && npx vercel deploy --prod --yes --token "$first" > /dev/null 2>&1; then
+                if npx --yes vercel link --yes --project "$project" --token "$first" > /dev/null 2>&1 \
+                  && npx --yes vercel deploy --prod --yes --token "$first" > /dev/null 2>&1; then
                   echo "$project: deployed"
                   [ -n "$bot" ] && wake "${bot%/}" now
                 else
