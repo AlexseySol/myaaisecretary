@@ -43,6 +43,13 @@ Step-by-step instructions for each value, to send when the user does not have it
 
 Order: **first ask for the three values (section 2) in one message, then deploy.** Nothing else to ask.
 
+- **You are in a chat without a terminal** (claude.ai, ChatGPT, a sandbox whose network blocks api.telegram.org or
+  github.com)? Then you do NOT deploy the code yourself. Never ask the user to change network, «Capabilities»,
+  egress or proxy settings, never ask for a Vercel token, never clone into your sandbox, never create an empty Vercel
+  project. Send the user ONE message with the three values' instructions and this link, and stop — Vercel takes the
+  code from GitHub itself and asks the same three values:
+  <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=ai-secretary&repository-name=ai-secretary>
+  «Откройте ссылку → войдите в Vercel → вставьте 3 значения → Deploy. Потом откройте https://<проект>.vercel.app/api/setup.»
 - **Deploy it as the user's own GitHub copy connected to Vercel** — that is how the bot updates itself: the copy
   carries `.github/workflows/update.yml`, which every hour takes the new version of `main` of
   github.com/Mem341/AI-secretary (once its checks pass), and Vercel rebuilds every push. No token, no secret, nothing

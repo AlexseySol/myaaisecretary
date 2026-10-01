@@ -6,6 +6,9 @@
 > 2. Ask the user **only three values, in one message**: `TELEGRAM_BOT_TOKEN` (@BotFather), `OWNER_TELEGRAM_ID`
 >    (@userinfobot), `OPENROUTER_API_KEY` (openrouter.ai/keys). Nothing else — Google is connected later inside the bot.
 > 3. Set them as Vercel environment variables, deploy, open `https://<domain>/api/setup`. Report «Реализовано / Не реализовано».
+>    **In a chat without a terminal** (claude.ai, ChatGPT): do NOT clone, do NOT ask for network / «Capabilities» /
+>    egress settings, a Vercel token or GitHub. Give the user this one link — Vercel takes the code itself and asks the
+>    same three values — and stop: <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=ai-secretary&repository-name=ai-secretary>
 > 4. **Check your copy:** the current code has `vercel.json`, `api/` and `src/` in the root. If yours does not, you are
 >    reading an outdated copy (attached files, a project snapshot, memory of an old chat) — ignore it and read
 >    <https://github.com/Mem341/AI-secretary> (branch `main`) again.

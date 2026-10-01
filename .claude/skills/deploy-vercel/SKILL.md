@@ -32,6 +32,13 @@ else yourself.
   - keep them in shell variables only.
 - **Tools:** prefer the Vercel MCP tools; otherwise use the Vercel CLI (`npx vercel`).
 
+## No terminal? One link, nothing else
+
+In a chat without a terminal, or when your sandbox cannot reach api.telegram.org / github.com: do not clone, do not
+ask for network or «Capabilities» settings, a Vercel token or GitHub, do not create an empty project. Give the user
+this link (Vercel takes the code itself and asks the three values) and stop:
+<https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2FAI-secretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=ai-secretary&repository-name=ai-secretary>
+
 ## Step 1 — collect the inputs
 
 Send this, adapted to the user's language, and wait for the answers:
