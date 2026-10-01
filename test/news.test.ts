@@ -10,6 +10,15 @@ afterEach(() => vi.restoreAllMocks());
 const ALL = `${GMAIL_SCOPE} https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/pubsub https://www.googleapis.com/auth/calendar.app.created`;
 
 describe("«what is new» after a new version", () => {
+  it("every release line is written for every owner: no test names, a known heading", async () => {
+    const { RELEASES } = await import("../src/changelog");
+    for (const r of RELEASES) {
+      const lines = [...(r.added ?? []), ...(r.changed ?? []), ...(r.fixed ?? [])];
+      expect(lines.length).toBeGreaterThan(0);
+      for (const l of lines) expect(l).not.toMatch(/ЫЫ|ТЕСТ\b|TEST\b/);
+    }
+  });
+
   it("once: the changes, then — checked live — what the owner has to do", async () => {
     await connectGoogle();
     const calls = mockFetch([]);
@@ -17,7 +26,8 @@ describe("«what is new» after a new version", () => {
     expect(await announceUpdate(env)).toBe(true);
     const msg = tgCalls(calls, "sendMessage").at(-1)!;
     expect(String(msg.text)).toContain("🆕 <b>Бот оновлено</b>");
-    expect(String(msg.text)).toContain("<b>Додано:</b>");
+    // The latest releases, under their headings.
+    expect(String(msg.text)).toMatch(/<b>(Додано|Змінено|Виправлено):<\/b>/);
     // An old Google connection: the new permissions are missing.
     expect(String(msg.text)).toContain("Що зробити");
     expect(JSON.stringify(msg.reply_markup)).toContain("з усіма галочками");

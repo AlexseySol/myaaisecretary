@@ -2,21 +2,27 @@
  * What is new in each version, for the owner: after a deployment the bot says it once (bot/news.ts). Add a release
  * (the next number, newest first) with every change the owner would notice; plain words, no technical details.
  * Whether the owner must do something (reconnect Google, the Pub/Sub check) is found out live, not written here.
+ *
+ * Every copy of the bot shows these lines to its own owner, so write them for everyone:
+ * - what the product does now, in general words — never one owner's case, test data or names («ЫЫ», «ТЕСТ», «Іван»);
+ * - added = a new ability; changed = something works differently; fixed = something did not work and now does
+ *   (say what now works, briefly, not the story of how it broke).
  */
 export interface Release {
   v: number;
   date: string;
   added?: string[];
   changed?: string[];
+  fixed?: string[];
 }
 
 export const RELEASES: Release[] = [
   {
     v: 16,
     date: "2026-10-01",
-    added: ["📅📧 «Скасуй зустріч і напиши учасникам лист» — тепер роблю обидва: і календар, і лист (з превʼю й «так»)"],
-    changed: [
-      "🗑 «Видали ЫЫ і ТЕСТ» — видаляю обидві названі зустрічі одразу; підтвердження питаю лише для «усіх» чи неназваних",
+    fixed: [
+      "📅📧 Запит одразу про зустріч і лист (напр. «скасуй зустріч і повідом учасників листом») виконується повністю — і в календарі, і поштою",
+      "🗑 Кілька зустрічей, названих в одному повідомленні, видаляються одразу; підтвердження питаю лише для «усіх» чи неназваних",
     ],
   },
   {

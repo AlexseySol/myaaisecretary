@@ -25,6 +25,8 @@ export async function announceUpdate(env: Env): Promise<boolean> {
   const lines = ["🆕 <b>Бот оновлено</b>"];
   if (added.length) lines.push("", "<b>Додано:</b>", ...added.map((a) => `• ${esc(a)}`));
   if (changed.length) lines.push("", "<b>Змінено:</b>", ...changed.map((c) => `• ${esc(c)}`));
+  const fixed = releases.flatMap((r) => r.fixed ?? []);
+  if (fixed.length) lines.push("", "<b>Виправлено:</b>", ...fixed.map((f) => `• ${esc(f)}`));
 
   const todo: string[] = [];
   const keyboard: InlineKeyboard = [];

@@ -127,6 +127,9 @@ webhook and redirects to the bot; `/api/health` shows the state.
 - Every change the owner would notice gets a release in `src/changelog.ts` (next number, newest first, plain words):
   after the deploy the bot tells the owner once what was added/changed (`bot/news.ts`, the last seen number is
   `OwnerSettings.v`) and checks live whether the owner must do something (reconnect Google, the reminders check).
+  Write release lines for every owner: what the product does now, in general words — never this owner's case, test
+  data or names; `added` = new ability, `changed` = works differently, `fixed` = did not work and now does (shown as
+  «Виправлено:»).
 - Updates: a deployed copy is the owner's GitHub copy connected to Vercel; its `.github/workflows/update.yml` (skipped in
   Mem341/aisecretary itself) takes the new `main` hourly once its checks pass — no token, no secret; keep it that way.
   `.github/workflows/wake.yml` opens the bot's `/api/setup` the moment Vercel reports a successful production deploy
