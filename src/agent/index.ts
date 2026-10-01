@@ -140,7 +140,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       : await runAgent(env, {
           model: ctx.model,
           onTool: tracking(ctx),
-          system: gmailPrompt() + factsBlock() + conversationBlock(),
+          system: gmailPrompt(await loadDirectory(env).catch(() => [])) + factsBlock() + conversationBlock(),
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
           tools: [...gmailTools(env), ...memoryTools],

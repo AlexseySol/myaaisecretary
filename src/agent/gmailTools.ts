@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { Calendar } from "../google/calendar";
 import { addressOf, buildRawMessage, type GLabel, type GMessage, type GPart, Gmail, replySubject, toMailMessage } from "../google/gmail";
 import { fileText } from "./files";
 import { str, type Tool } from "./runner";
@@ -113,6 +114,36 @@ export function gmailTools(env: Env): Tool[] {
         // More than 3: the rest by name, so none is out of reach.
         const rest = chosen.slice(3).map((f) => f.name);
         return rest.length ? { attachments: read, more: rest, note: "Решту читайте з Name" } : read;
+      },
+    },
+    {
+      spec: {
+        name: "meeting_attendees",
+        description:
+          "Find a calendar meeting by words of its title and get its participants' emails — to write to them (also a meeting cancelled or deleted in the last days). Read-only. Optional: date (YYYY-MM-DD) when several meetings match.",
+        parameters: object({ query: s("Words of the meeting title"), date: s("Day of the meeting, YYYY-MM-DD (optional)") }, ["query"]),
+      },
+      async run(a) {
+        const day = str(a, "date");
+        const from = day ? Date.parse(`${day}T00:00:00Z`) - 86_400_000 : Date.now() - 14 * 86_400_000;
+        const to = day ? Date.parse(`${day}T00:00:00Z`) + 2 * 86_400_000 : Date.now() + 60 * 86_400_000;
+        const page = await new Calendar(env).listEvents({
+          q: str(a, "query"),
+          singleEvents: "true",
+          showDeleted: "true",
+          timeMin: new Date(from).toISOString(),
+          timeMax: new Date(to).toISOString(),
+          maxResults: "10",
+        });
+        const meetings = page.items
+          .filter((e) => e.summary)
+          .map((e) => ({
+            title: e.summary,
+            start: e.start?.dateTime ?? e.start?.date,
+            cancelled: e.status === "cancelled" || undefined,
+            attendees: (e.attendees ?? []).filter((x) => !x.self).map((x) => ({ email: x.email, name: x.displayName })),
+          }));
+        return meetings.length ? meetings : { meetings: [], note: "No meeting with these words. Ask the owner for the title or the people's emails." };
       },
     },
     {

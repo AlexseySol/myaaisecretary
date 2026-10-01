@@ -241,6 +241,35 @@ describe("old requests in the memory are never carried out again", () => {
     expect(out.free.length).toBeGreaterThan(0);
   });
 
+  it("the mail agent finds a meeting's participants itself — a cancelled one too — instead of saying it cannot", async () => {
+    await connectGoogle();
+    let params: URLSearchParams | undefined;
+    mockFetch([
+      (url) => {
+        if (!url.pathname.endsWith("/calendars/primary/events")) return undefined;
+        params = url.searchParams;
+        return Response.json({
+          items: [
+            {
+              id: "t1",
+              status: "cancelled",
+              summary: "Планування",
+              start: { dateTime: "2026-10-02T14:00:00+03:00" },
+              attendees: [{ email: "me@x.ua", self: true }, { email: "ann@x.ua", displayName: "Анна" }],
+            },
+          ],
+        });
+      },
+    ]);
+    const { env } = testEnv();
+    const { gmailTools } = await import("../src/agent/gmailTools");
+    const tool = gmailTools(env).find((t) => t.spec.name === "meeting_attendees")!;
+    const out = (await tool.run({ query: "Планування" })) as { title: string; cancelled?: boolean; attendees: { email: string }[] }[];
+    expect(params?.get("showDeleted")).toBe("true");
+    expect(params?.get("q")).toBe("Планування");
+    expect(out[0]).toMatchObject({ title: "Планування", cancelled: true, attendees: [{ email: "ann@x.ua", name: "Анна" }] });
+  });
+
   it("a request that also asks for an email goes to the Supervisor, which has both agents", async () => {
     const { routeByKeywords, routeFollowUp } = await import("../src/agent/route");
     const input = (text: string, replyRef?: string) => ({ chatId: OWNER, inputType: "text" as const, text, replyRef });

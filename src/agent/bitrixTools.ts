@@ -191,9 +191,14 @@ export function bitrixTools(env: Env): Tool[] {
       },
       async run(a) {
         // The whole discussion, every message in full; a very long one comes in parts, nothing is cut off.
-        const comments = await bx.comments(Number(a.taskId));
+        const { comments, problem } = await bx.discussion(Number(a.taskId));
         const text = comments.map((c) => `[${kyivDateTime(c.date)}] ${c.authorName}: ${c.text}`).join("\n");
-        return { total: comments.length, discussion: comments.length ? textPart(text, Number(a.part) || 1) : "Коментарів немає" };
+        return {
+          total: comments.length,
+          discussion: comments.length ? textPart(text, Number(a.part) || 1) : problem ? "Чат задачі прочитати не вдалося" : "Коментарів немає",
+          // Said to the owner as it is: never «no comments» when the chat simply could not be read.
+          ...(problem ? { problem, note: "Скажи власнику цю причину дослівно; не пиши, що коментарів немає." } : {}),
+        };
       },
     },
     {

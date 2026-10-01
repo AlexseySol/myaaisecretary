@@ -73,6 +73,15 @@ const MAX_CHAT_PAGES = 40;
 
 type ChatPage = { messages?: Record<string, unknown>[]; users?: { id: number | string; name?: string }[] };
 
+/** Why a task chat could not be read, in plain words (Bitrix24's own words otherwise). */
+function chatProblem(err: unknown): string {
+  const text = err instanceof Error ? err.message : String(err);
+  if (/insufficient_scope|scope|higher privileges|ACCESS_DENIED|access denied|METHOD_NOT_FOUND|method not found/i.test(text)) {
+    return "У вебхука Bitrix24 немає права «Чат і повідомлення» (im), тож «Чат завдання» мені не видно. Додайте це право у вебхуку (Bitrix24 → Розробникам → Інше → Вхідний вебхук → права) і надішліть адресу ще раз у /settings → 📋 Bitrix24.";
+  }
+  return `Bitrix24 не віддав «Чат завдання»: ${text.slice(0, 200)}`;
+}
+
 /** A page of a task chat as comments (system messages as «Система»). */
 function chatComments(page: ChatPage | undefined): BxComment[] {
   const names = new Map((page?.users ?? []).map((u) => [String(u.id), u.name ?? ""]));
@@ -221,16 +230,54 @@ export class Bitrix {
    * right for the chat; without it only old comments are read.
    */
   async comments(id: string | number): Promise<BxComment[]> {
+    return (await this.discussion(id)).comments;
+  }
+
+  /**
+   * One task's whole discussion — old comments plus its whole «Чат завдання» — and, when the chat could not be read,
+   * why, in plain words for the owner (a missing webhook right is the usual reason; it is never swallowed silently).
+   */
+  async discussion(id: string | number): Promise<{ comments: BxComment[]; problem?: string }> {
     const key = String(id);
-    const first = (await this.commentsOf([key]))[key] ?? [];
-    // A long chat: read it whole, not only its latest 50 messages.
-    const chatCount = first.filter((c) => c.id.startsWith("chat")).length;
-    if (chatCount < PAGE) return first;
-    const chat = (await this.chatIds([key]))[key];
-    if (!chat) return first;
-    const full = await this.fullChat(chat).catch(() => []);
-    const merged = new Map([...first, ...full].map((c) => [c.id, c]));
-    return [...merged.values()].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+    const old = await this.call<Record<string, string>[]>("task.commentitem.getlist", { TASKID: Number(key), ORDER: { POST_DATE: "asc" } })
+      .then(({ result }) => (result ?? []).map(toComment))
+      .catch(() => [] as BxComment[]);
+    const chat = await this.taskChat(key);
+    let messages: BxComment[] = [];
+    let problem = chat.problem;
+    if (chat.chatId) {
+      try {
+        messages = await this.fullChat(chat.chatId);
+      } catch (err) {
+        problem = chatProblem(err);
+      }
+    }
+    const all = [...new Map([...old, ...messages].map((c) => [c.id, c])).values()];
+    return { comments: all.sort((a, b) => Date.parse(a.date) - Date.parse(b.date)), ...(problem ? { problem } : {}) };
+  }
+
+  /** The chat of one task: by the task entity, else from the task's own field; or why it cannot be found. */
+  async taskChat(id: string): Promise<{ chatId?: string; problem?: string }> {
+    const errors: unknown[] = [];
+    try {
+      const { result } = await this.call<{ ID?: string | number; id?: string | number } | string | number | null>("im.chat.get", {
+        ENTITY_TYPE: "TASKS_TASK",
+        ENTITY_ID: id,
+      });
+      const chat = typeof result === "object" && result ? (result.ID ?? result.id) : result;
+      if (chat) return { chatId: String(chat) };
+    } catch (err) {
+      errors.push(err);
+    }
+    try {
+      const { result } = await this.call<{ task?: Record<string, unknown> }>("tasks.task.get", { taskId: Number(id), select: ["ID", "CHAT_ID"] });
+      const t = result?.task ?? {};
+      const chat = t.chatId ?? t.CHAT_ID ?? t.chat_id;
+      if (chat && String(chat) !== "0") return { chatId: String(chat) };
+    } catch (err) {
+      errors.push(err);
+    }
+    return errors.length ? { problem: chatProblem(errors[0]) } : {};
   }
 
   /** Discussions of many tasks at once (batch requests of up to 50 calls). */
@@ -263,11 +310,11 @@ export class Bitrix {
     // Second way: the chat id as a field of the task.
     const missing = ids.filter((id) => !out[id]);
     if (missing.length) {
-      const tasks = await this.batch<{ task?: { chatId?: string | number } }>(
+      const tasks = await this.batch<{ task?: { chatId?: string | number; CHAT_ID?: string | number } }>(
         Object.fromEntries(missing.map((id) => [`g${id}`, `tasks.task.get?taskId=${encodeURIComponent(id)}&select[]=ID&select[]=CHAT_ID`])),
-      ).catch(() => ({}) as Record<string, { task?: { chatId?: string | number } }>);
+      ).catch(() => ({}) as Record<string, { task?: { chatId?: string | number; CHAT_ID?: string | number } }>);
       for (const id of missing) {
-        const chat = tasks[`g${id}`]?.task?.chatId;
+        const chat = tasks[`g${id}`]?.task?.chatId ?? tasks[`g${id}`]?.task?.CHAT_ID;
         if (chat && String(chat) !== "0") out[id] = String(chat);
       }
     }

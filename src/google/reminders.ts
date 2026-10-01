@@ -127,16 +127,22 @@ const emails = (marks: number[]) => marks.slice(0, 5).map((minutes) => ({ method
 const popups = (marks: number[]) => marks.slice(0, 5).map((minutes) => ({ method: "popup", minutes }));
 
 /**
- * The owner's reminders on a meeting itself. With the signal calendar the meeting carries only Calendar notifications
- * (popups) and the Telegram signals live on its shadow. Without it (no permission yet) the 5 places Google allows are
- * shared: an email signal per mark for Telegram first, then popups for the marks nearest to the start.
+ * The owner's reminders on a meeting itself: an email signal per mark for Telegram and a popup per mark for Calendar —
+ * right on the meeting, no copy anywhere, while they fit in the 5 places Google allows (the usual 1–2 marks). Only with
+ * more marks than that do the Telegram signals move to a shadow in the bot's signal calendar and the meeting keeps the
+ * popups. Without the signal calendar the 5 places are shared: email signals first, then the popups nearest the start.
  */
 export function desiredReminders(marks: number[], ch: Channels = { t: true, c: true }, signalCalendar = false): NonNullable<GEvent["reminders"]> {
   if (!marks.length) return { useDefault: true };
-  if (signalCalendar) return { useDefault: false, overrides: ch.c ? popups(marks) : [] };
+  if (signalCalendar && !fitsOnMeeting(marks, ch)) return { useDefault: false, overrides: ch.c ? popups(marks) : [] };
   const overrides = ch.t ? emails(marks) : [];
   if (ch.c) for (const m of [...marks].sort((x, y) => x - y)) if (overrides.length < 5) overrides.push({ method: "popup", minutes: m });
   return { useDefault: false, overrides };
+}
+
+/** Telegram signals and Calendar popups both fit on the meeting itself (Google allows 5 reminders per event). */
+export function fitsOnMeeting(marks: number[], ch: Channels = { t: true, c: true }): boolean {
+  return (ch.t ? marks.length : 0) + (ch.c ? marks.length : 0) <= 5;
 }
 
 const reminderKey = (r: GEvent["reminders"]) =>
@@ -176,7 +182,8 @@ export async function applyEmailReminders(env: Env, events?: GEvent[], now = Dat
   for (const ev of list) {
     const change = eventToChange(ev);
     if (change.kind !== "upsert" || change.meeting.end_at < now) continue;
-    if (telegram) upcoming.push({ key: ev.id, summary: `🔔 ${ev.summary ?? "зустріч"}`, start: change.meeting.start_at, end: change.meeting.end_at, minutes: marks });
+    // A shadow copy only when the signals do not fit on the meeting itself (3+ marks).
+    if (telegram && !fitsOnMeeting(marks, { t: telegram, c: ch.c })) upcoming.push({ key: ev.id, summary: `🔔 ${ev.summary ?? "зустріч"}`, start: change.meeting.start_at, end: change.meeting.end_at, minutes: marks });
     const target = ev.recurringEventId ?? ev.id;
     if (done.has(target)) continue;
     done.add(target);
@@ -227,7 +234,6 @@ export async function handleReminderEmail(env: Env, m: GMessage, now = Date.now(
   // A signal (the shadow in the bot's signal calendar) stands for the owner's meeting — whatever the subject's language.
   const signal = await signalEvent(env, id);
   const target = signal?.ev.extendedProperties?.private?.aisFor ?? null;
-  if (!target && !REMINDER_SUBJECT.test(mail.subject.trim())) return false;
   const gmail = new Gmail(env);
   if (target?.startsWith(DIGEST_PREFIX) && signal) {
     // One report per day whichever copy of the bot got the email.
@@ -237,6 +243,9 @@ export async function handleReminderEmail(env: Env, m: GMessage, now = Date.now(
   }
   const cal = new Calendar(env);
   const ev = await cal.getEvent(target ?? id).catch(() => null);
+  // The meeting's own email reminder (the bot put it there), a shadow's, or a reminder-looking subject.
+  const ownSignal = !!ev?.reminders?.overrides?.some((o) => o.method === "email");
+  if (!target && !ownSignal && !REMINDER_SUBJECT.test(mail.subject.trim())) return false;
   const change = ev ? eventToChange(ev) : null;
   if (ev && change?.kind === "upsert" && change.meeting.start_at > now - 5 * MINUTE) {
     const marks = await reminderMarks(env);

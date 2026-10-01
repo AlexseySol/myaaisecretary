@@ -72,6 +72,22 @@ function bitrixRoute(writes: { method: string; body: Record<string, unknown> }[]
         const closedOnly = JSON.stringify(f.REAL_STATUS) === '["5"]';
         return Response.json({ result: { tasks: closedOnly ? [] : tasks } });
       }
+      case "task.commentitem.getlist":
+        return Response.json({ result: Number(body.TASKID) === 123 ? [{ ID: "1", AUTHOR_ID: "7", AUTHOR_NAME: "Іван Петренко", POST_DATE: "2026-09-28T12:00:00+03:00", POST_MESSAGE: "[b]Чекаю[/b] цифри від бухгалтерії" }] : [] });
+      case "im.chat.get":
+        return Response.json({ result: String(body.ENTITY_ID) === "124" ? { ID: 777 } : null });
+      case "im.dialog.messages.get":
+        return Response.json({
+          result: {
+            messages: [
+              { id: 2, author_id: 9, date: "2026-09-29T10:00:00+03:00", text: "Постачальник надіслав правки, узгоджую з юристом" },
+              { id: 1, author_id: 0, date: "2026-09-25T09:00:00+03:00", text: "Задачу взято в роботу" },
+            ],
+            users: [{ id: 9, name: "Олена Коваль" }],
+          },
+        });
+      case "tasks.task.get":
+        return Response.json({ result: { task: { id: String(body.taskId) } } });
       case "task.stages.get":
         return Response.json({ result: { "11": { ID: "11", TITLE: "Узгодження" } } });
       case "batch": {
@@ -259,6 +275,24 @@ describe("the task chat («Чат завдання») of new Bitrix24 task cards
     );
   });
 
+  it("a chat the webhook may not read is reported with the reason, never as «no comments»", async () => {
+    mockFetch([
+      (url) => {
+        if (!url.href.startsWith(WEBHOOK)) return undefined;
+        const method = url.pathname.split("/").at(-1)!.replace(/\.json$/, "");
+        if (method === "task.commentitem.getlist") return Response.json({ result: [] });
+        if (method === "im.chat.get") return Response.json({ error: "insufficient_scope", error_description: "The request requires higher privileges than provided by the webhook token" }, { status: 401 });
+        if (method === "tasks.task.get") return Response.json({ result: { task: { id: "5" } } });
+        return undefined;
+      },
+    ]);
+    const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
+    const tool = bitrixTools(env).find((t) => t.spec.name === "get_task_comments")!;
+    const out = (await tool.run({ taskId: 5 })) as { discussion: string; problem?: string };
+    expect(out.discussion).not.toBe("Коментарів немає");
+    expect(out.problem).toContain("Чат і повідомлення");
+  });
+
   it("a long task chat is read to its beginning, page by page", async () => {
     const { Bitrix } = await import("../src/bitrix/client");
     const msgs = Array.from({ length: 120 }, (_, i) => ({ id: i + 1, author_id: 9, date: new Date(Date.UTC(2026, 8, 1, 0, i)).toISOString(), text: `msg ${i + 1}` }));
@@ -272,6 +306,8 @@ describe("the task chat («Чат завдання») of new Bitrix24 task cards
         const method = url.pathname.split("/").at(-1)!.replace(/\.json$/, "");
         const body = JSON.parse(init.bodyText || "{}");
         if (method === "im.dialog.messages.get") return Response.json({ result: page(body.LAST_ID) });
+        if (method === "im.chat.get") return Response.json({ result: { ID: 55 } });
+        if (method === "task.commentitem.getlist") return Response.json({ result: [] });
         if (method === "batch") {
           const cmd = body.cmd as Record<string, string>;
           const answers: Record<string, unknown> = { t7: [], c7: { ID: 55 }, m7: page() };

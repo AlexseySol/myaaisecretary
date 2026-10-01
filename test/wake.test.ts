@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { gmailSync } from "../src/google/gmailPush";
 import { loadOwnerSettings, saveOwnerSettings } from "../src/google/oauth";
 import { ensureGmailPush, setupGoogleWake } from "../src/google/pubsub";
-import { desiredReminders, eventIdFromEmail } from "../src/google/reminders";
+import { desiredReminders, eventIdFromEmail, fitsOnMeeting } from "../src/google/reminders";
 import type { GMessage } from "../src/google/gmail";
 import { connectGoogle, GMAIL_SCOPE, lastBotMessage, mockFetch, resetInstance, testEnv, tgCalls } from "./helpers";
 
@@ -37,6 +37,30 @@ function fakePubSub(disabled = false) {
   };
   return { made, route };
 }
+
+describe("reminders sit on the meeting itself, no copy, while they fit", () => {
+  it("1–2 marks: an email signal and a popup per mark on the meeting; 3+ marks: popups only, signals on a shadow", () => {
+    expect(fitsOnMeeting([30, 10])).toBe(true);
+    expect(desiredReminders([30, 10], { t: true, c: true }, true)).toEqual({
+      useDefault: false,
+      overrides: [
+        { method: "email", minutes: 30 },
+        { method: "email", minutes: 10 },
+        { method: "popup", minutes: 10 },
+        { method: "popup", minutes: 30 },
+      ],
+    });
+    expect(fitsOnMeeting([60, 30, 10])).toBe(false);
+    expect(desiredReminders([60, 30, 10], { t: true, c: true }, true)).toEqual({
+      useDefault: false,
+      overrides: [
+        { method: "popup", minutes: 60 },
+        { method: "popup", minutes: 30 },
+        { method: "popup", minutes: 10 },
+      ],
+    });
+  });
+});
 
 describe("Google as the bot's clock (no cron, no outside service)", () => {
   it("sets up Gmail → bot push in the owner's own project: topic, Gmail's publish right, push subscription", async () => {

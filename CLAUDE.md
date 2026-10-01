@@ -75,8 +75,10 @@ webhook and redirects to the bot; `/api/health` shows the state.
   Gmail API + Pub/Sub push (`gmailPush.ts`: n8n WF3 "📧 Нова пошта!" format).
 - Meeting reminders use Google as the clock — no cron, no outside service (the owner forbade both). Each chosen time
   gives BOTH a Telegram message and a Google Calendar notification (always both — the owner asked for no channel buttons):
-  the meeting carries popups; its Telegram email signals sit on a shadow event in the bot's own calendar
-  «AI-secretary · сигнали» (`google/signals.ts`, scope calendar.app.created) — Google allows only 5 reminders per event.
+  while they fit in Google's 5 reminders per event (1–2 marks, `fitsOnMeeting`) the meeting itself carries both an email
+  signal and a popup per mark — no copy; with 3+ marks the Telegram email signals move to a shadow event in the bot's own
+  calendar «AI-secretary · сигнали» (`google/signals.ts`, scope calendar.app.created), which also holds the morning
+  report's daily signal.
   `applyEmailReminders` keeps both in step (connect, daily, calendar push, settings);
   Google sends the email at that minute, Gmail push wakes the bot, `handleReminderEmail` sends the Telegram reminder
   and trashes the email. The Gmail push itself is set up by the bot in the OAuth client's project (`pubsub.ts`
