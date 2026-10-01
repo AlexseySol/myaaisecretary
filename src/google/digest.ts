@@ -277,6 +277,12 @@ export async function sendDueDigest(env: Env, now = Date.now()): Promise<boolean
   return sendDigestOnce(env, key, now);
 }
 
+/** When the daily cron (vercel.json, 04:45 UTC) comes, Kyiv time: 7:45 in summer, 6:45 in winter. */
+export function cronTimeText(now = Date.now()): string {
+  const d = new Date(now);
+  return formatTime(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 4, 45))).replace(/^0/, "");
+}
+
 /**
  * The daily cron's part (Vercel runs it once a day, 7:45 Kyiv in summer): the clock of last resort. It sends today's
  * report when Google does not wake the bot, when the report's time has already passed, and when yesterday's report never
@@ -304,7 +310,7 @@ export async function digestStatus(env: Env, now = Date.now()): Promise<string> 
   const choice = await loadDigestChoice(env);
   if (!choice.on) return "";
   if (!(await digestByGoogle(env))) {
-    return "⚠️ Google ще не будить мене, тож звіт приходить о 7:45. Щоб він приходив у ваш час — /settings → ⏰ → «🔁 Налаштувати».";
+    return `⚠️ Google ще не будить мене, тож звіт приходить о ${cronTimeText(now)}, а не о ${timeText(choice.time)}. Щоб він приходив у ваш час — натисніть «🔁 Налаштувати».`;
   }
   const { key, start } = todays(choice, now);
   const sc = (await loadOwnerSettings(env).catch((): OwnerSettings => ({}))).sc!;

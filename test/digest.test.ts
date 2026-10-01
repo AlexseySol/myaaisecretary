@@ -161,6 +161,12 @@ describe("the report's safety net", () => {
     expect(await sendMorningFallback(env, CRON)).toBe(true);
   });
 
+  it("the daily run's time in Kyiv: 7:45 in summer, 6:45 in winter", async () => {
+    const { cronTimeText } = await import("../src/google/digest");
+    expect(cronTimeText(Date.parse("2026-07-01T12:00:00Z"))).toBe("7:45");
+    expect(cronTimeText(Date.parse("2026-12-01T12:00:00Z"))).toBe("6:45");
+  });
+
   it("a day without meetings still gets its report by default", async () => {
     await connectGoogle();
     mockFetch([(url) => (url.hostname === "www.googleapis.com" && url.pathname.includes("/calendar/") ? Response.json({ items: [] }) : undefined)]);

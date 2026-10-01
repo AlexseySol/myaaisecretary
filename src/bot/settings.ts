@@ -8,7 +8,7 @@ import { wakeReady } from "../google/pubsub";
 import { hasWorkspaceScope } from "../google/workspace";
 import { refreshCommands } from "./commands";
 import { applyEmailReminders, mailNotices } from "../google/reminders";
-import { DIGEST_BLOCKS, DIGEST_TIMES, type DigestBlock, digestStatus, loadDigestChoice, timeText } from "../google/digest";
+import { cronTimeText, DIGEST_BLOCKS, DIGEST_TIMES, type DigestBlock, digestByGoogle, digestStatus, loadDigestChoice, timeText } from "../google/digest";
 import { integrationSource } from "../integrations";
 import { disconnect, INTEGRATION_NAMES, type Integration, startConnect } from "./connect";
 import type { User } from "./owner";
@@ -167,6 +167,8 @@ async function remindersView(env: Env): Promise<{ html: string; keyboard: Inline
 async function digestView(env: Env): Promise<{ html: string; keyboard: InlineKeyboard }> {
   const c = await loadDigestChoice(env);
   const status = await digestStatus(env).catch(() => "");
+  // Without Google waking the bot the chosen time cannot work: the report comes with the daily run.
+  const byGoogle = await digestByGoogle(env);
   const tick = (on: boolean) => (on ? "✅" : "▫️");
   const html = [
     "☀️ <b>Ранковий звіт</b>",
@@ -192,6 +194,7 @@ async function digestView(env: Env): Promise<{ html: string; keyboard: InlineKey
         { text: "👀 Показати зараз", callback_data: "set:dg:now" },
         { text: c.on ? "🔕 Вимкнути звіт" : "🔔 Увімкнути звіт", callback_data: "set:digest" },
       ],
+      ...(c.on && !byGoogle ? [[{ text: "🔁 Налаштувати", callback_data: "set:wake" }]] : []),
       [{ text: "⬅️ Готово", callback_data: "set:back" }],
     ],
   };
@@ -308,7 +311,8 @@ export async function handleSettingsButton(env: Env, user: User, data: string, c
       settings.dg = { ...settings.dg, b: c.blocks.includes(b) ? c.blocks.filter((x) => x !== b) : [...c.blocks, b] };
     }
     await saveOwnerSettings(env, settings);
-    await answer(data === "set:digest" ? (settings.d ? "Ранковий звіт увімкнено" : "Ранковий звіт вимкнено") : "Збережено");
+    const saved = what === "t" && !(await digestByGoogle(env)) ? `Збережено. Поки Google не будить мене, звіт приходить о ${cronTimeText()}` : "Збережено";
+    await answer(data === "set:digest" ? (settings.d ? "Ранковий звіт увімкнено" : "Ранковий звіт вимкнено") : saved);
     // The report's signal moves to the new time.
     await applyEmailReminders(env).catch(() => 0);
     return show(await digestView(env));
