@@ -1,8 +1,12 @@
 name: Wake the bot after a deploy
 
-# Vercel reports every deploy of a Git-connected copy back to GitHub. As soon as a production deploy succeeds, this
+# Vercel reports every deploy of a Git-connected project back to GitHub. As soon as a production deploy succeeds, this
 # opens the bot's /api/setup: the new version wakes up at once and tells the owner «🆕 Бот оновлено» — without waiting
-# for the owner's next message. No token, no secret: only a public request to the bot's own address.
+# for the owner's next message. No token, no secret.
+#
+# The deploy's own address («<project>-<hash>-<team>.vercel.app») is usually behind Vercel's login, the production
+# addresses are not: «<project>-<team>.vercel.app» and «<project>.vercel.app». Only an address whose /api/health
+# reports this very commit is woken — never somebody else's project.
 on: deployment_status
 
 permissions: {}
@@ -12,16 +16,26 @@ jobs:
     if: github.event.deployment_status.state == 'success' && startsWith(github.event.deployment.environment, 'Production')
     runs-on: ubuntu-latest
     steps:
-      - name: Open the bot's /api/setup
+      - name: Find the bot and open its /api/setup
         env:
           DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
-          REPO: ${{ github.event.repository.name }}
+          SHA: ${{ github.event.deployment.sha }}
+          BOT_URL: ${{ vars.BOT_URL }}
         run: |
-          # The deploy's own address may be behind Vercel's login; the project's production address is not.
-          for url in "https://${REPO}.vercel.app" "$DEPLOY_URL"; do
-            [ -z "$url" ] && continue
-            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 60 "${url%/}/api/setup" || echo "000")
-            echo "$url: $code"
-            case "$code" in 2*|3*) exit 0 ;; esac
+          host=$(printf '%s' "$DEPLOY_URL" | sed -E 's#^https?://##; s#/.*$##')
+          project=$(printf '%s' "$host" | sed -nE 's#^(.+)-[a-z0-9]{9}-(.+)\.vercel\.app$#\1#p')
+          team=$(printf '%s' "$host" | sed -nE 's#^(.+)-[a-z0-9]{9}-(.+)\.vercel\.app$#\2#p')
+          candidates="$BOT_URL"
+          [ -n "$project" ] && candidates="$candidates https://$project-$team.vercel.app https://$project.vercel.app"
+          candidates="$candidates https://$host"
+          for url in $candidates; do
+            url="${url%/}"
+            health=$(curl -sS --max-time 30 "$url/api/health" || true)
+            if printf '%s' "$health" | grep -q "\"commit\":\"$SHA\""; then
+              code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 60 "$url/api/setup" || echo "000")
+              echo "$url: woken ($code)"
+              exit 0
+            fi
+            echo "$url: not this bot or not this version"
           done
           echo "Could not reach the bot; it tells what is new at its next wake-up instead"

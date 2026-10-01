@@ -130,7 +130,9 @@ webhook and redirects to the bot; `/api/health` shows the state.
 - Updates: a deployed copy is the owner's GitHub copy connected to Vercel; its `.github/workflows/update.yml` (skipped in
   Mem341/AI-secretary itself) takes the new `main` hourly once its checks pass — no token, no secret; keep it that way.
   `.github/workflows/wake.yml` opens the bot's `/api/setup` the moment Vercel reports a successful production deploy
-  (`deployment_status`), so «🆕 Бот оновлено» comes at once.
+  (`deployment_status`), so «🆕 Бот оновлено» comes at once: it derives the production address from the deploy's own
+  («<project>-<team>.vercel.app», «<project>.vercel.app», or the repo variable `BOT_URL`) and wakes only the one whose
+  `/api/health` reports this commit.
 - Deploys: `.github/workflows/ci.yml` runs typecheck and tests, then — with the ONE repository secret `VERCEL_DEPLOY`,
   a line per bot «<Vercel token> <project name> <bot address>» — uploads the code with the Vercel CLI to each project
   (nothing to set up on Vercel's side, no Git connection) and opens each bot's `/api/setup` to wake it. Never put a
