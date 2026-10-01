@@ -74,14 +74,16 @@ const ALL_WORDS = /(^|\s)(все|всі|усі|всё|all)(\s|$)/i;
  * Whether the owner's current message allows deleting: a meeting is removed only when THIS message asks for it (never
  * because of something said earlier), and several at once — or «all» — only after an explicit «так».
  */
-export function deletionAllowed(currentText: string | undefined, deletedAlready: number): string | null {
+export function deletionAllowed(currentText: string | undefined, deletedAlready: number, title = ""): string | null {
   if (currentText === undefined) return null;
   const text = currentText.trim();
   const confirmed = CONFIRM.test(text);
   if (!confirmed && !DELETE_WORDS.test(text)) {
     return "The owner's current message does not ask to delete anything. Do NOT delete. Ask what they want.";
   }
-  if (!confirmed && (deletedAlready > 0 || ALL_WORDS.test(text))) {
+  // Each meeting named in the message itself («видали ЫЫ і ТЕСТ») is asked for explicitly.
+  const named = title.trim().length >= 2 && text.toLowerCase().includes(title.trim().toLowerCase());
+  if (!confirmed && !named && (deletedAlready > 0 || ALL_WORDS.test(text))) {
     return "Deleting several meetings needs the owner's explicit confirmation first: list them and ask «Видалити? (так / ні)». Do not delete now.";
   }
   return null;
@@ -291,11 +293,11 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
         parameters: object({ eventId: s("The Google Calendar event ID to delete") }, ["eventId"]),
       },
       async run(a) {
-        const refusal = deletionAllowed(opts.currentText, deleted);
-        if (refusal) return { error: refusal };
         const id = str(a, "eventId");
-        mark(`bot-cancel:${id}`, 10 * 60_000);
         const ev = await cal.getEvent(id);
+        const refusal = deletionAllowed(opts.currentText, deleted, ev.summary ?? "");
+        if (refusal) return { error: refusal };
+        mark(`bot-cancel:${id}`, 10 * 60_000);
         await cal.setPrivate(id, { ...(ev.extendedProperties?.private ?? {}), [PROP_BOT_CANCEL]: "1" }).catch(() => undefined);
         await cal.deleteEvent(id);
         deleted++;

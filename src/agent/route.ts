@@ -46,15 +46,25 @@ const SURE: Record<Agent, RegExp[]> = {
  * message is plainly a new request for another one.
  */
 export function routeFollowUp(input: AgentInput, waiting: Agent, bitrix = false): Agent | null {
+  const text = input.text.toLowerCase();
   const other = routeByKeywords(input, bitrix);
+  // Several kinds at once («так, скасуй і напиши їм лист») — the Supervisor, which has every agent.
+  if (!other && otherSure(waiting, text, bitrix)) return null;
   if (!other || other === waiting) return waiting;
   return matches(SURE[other], input.text.toLowerCase()) && !matches(SURE[waiting], input.text.toLowerCase()) ? other : waiting;
 }
 
+/** The text surely asks for another agent's kind of work too (an email while in the calendar, a meeting while in mail…). */
+function otherSure(current: Agent, text: string, bitrix: boolean): boolean {
+  return (Object.keys(SURE) as Agent[]).some((a) => a !== current && (a !== "bitrix_agent" || bitrix) && matches(SURE[a], text));
+}
+
 export function routeByKeywords(input: AgentInput, bitrix = false): Agent | null {
-  // A reply to the bot's own notice names its subject exactly.
-  if (input.replyRef?.startsWith("eventId:")) return "calendar_agent";
-  if (input.replyRef?.startsWith("messageId:")) return "gmail_agent";
+  // A reply to the bot's own notice names its subject exactly — unless it also asks for something of another kind
+  // («скасуй і напиши учасникам лист»): then the Supervisor, which has every agent.
+  const lower = input.text.toLowerCase();
+  if (input.replyRef?.startsWith("eventId:")) return otherSure("calendar_agent", lower, bitrix) ? null : "calendar_agent";
+  if (input.replyRef?.startsWith("messageId:")) return otherSure("gmail_agent", lower, bitrix) ? null : "gmail_agent";
   if (input.replyRef?.startsWith("taskId:")) return bitrix ? "bitrix_agent" : null;
   if (input.inputType === "forward" || input.images?.length) return null;
   const text = input.text.toLowerCase();

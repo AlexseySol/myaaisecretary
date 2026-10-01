@@ -184,6 +184,18 @@ describe("old requests in the memory are never carried out again", () => {
     expect(deletionAllowed("удали все встречи на сегодня", 0)).toMatch(/confirmation/);
     expect(deletionAllowed("так", 0)).toBeNull();
     expect(deletionAllowed("так", 3)).toBeNull();
+    // Each meeting named in the message is asked for explicitly: «видали ЫЫ і ТЕСТ» deletes both.
+    expect(deletionAllowed("видали ЫЫ і ТЕСТ", 1, "ТЕСТ")).toBeNull();
+    expect(deletionAllowed("видали ЫЫ і ТЕСТ", 1, "Планування")).toMatch(/confirmation/);
+  });
+
+  it("a request that also asks for an email goes to the Supervisor, which has both agents", async () => {
+    const { routeByKeywords, routeFollowUp } = await import("../src/agent/route");
+    const input = (text: string, replyRef?: string) => ({ chatId: OWNER, inputType: "text" as const, text, replyRef });
+    expect(routeByKeywords(input("скасуй і напиши учасникам лист, що переносимо", "eventId:e1"))).toBeNull();
+    expect(routeByKeywords(input("скасуй", "eventId:e1"))).toBe("calendar_agent");
+    expect(routeFollowUp(input("видали зустріч ТЕСТ і відправ учасникам письмо"), "calendar_agent")).toBeNull();
+    expect(routeFollowUp(input("так"), "calendar_agent")).toBe("calendar_agent");
   });
 });
 
