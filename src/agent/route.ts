@@ -22,10 +22,13 @@ const MAIL = [
 
 const matches = (patterns: RegExp[], text: string) => patterns.some((p) => p.test(text));
 
-export type Agent = "calendar_agent" | "gmail_agent" | "bitrix_agent" | "docs_agent";
+export type Agent = "calendar_agent" | "gmail_agent" | "bitrix_agent" | "docs_agent" | "notes_agent";
 
 /** Google Drive, Sheets, Docs and files. */
 const DOCS = [/гугл ?диск|google ?drive|(^|\s)диск(у|і|а)?(?=$|[\s,.!?])|таблиц|sheets?(?=$|[\s,.!?])|гугл ?док|google ?docs?|документ|файл|папк|pdf|word|ексел|эксел|excel|xlsx|docx/];
+
+/** The owner's own notes, to-dos and personal reminders (google/notes.ts). */
+const NOTES = [/нотатк|заметк|занотуй|запиши|запиш(у|ім)|записав|записува|записыва|нагадай|нагадуван|напомни|напоминан|ідея|ідею|идея|идею|думк|мысл|список справ|to-?do|туду|не забути|не забыть/];
 
 const TASKS = [
   /задач|задан|таск|\btask|бітрікс|битрикс|bitrix|б24|b24|дедлайн|доручен|поручен|доручи|поручи|прострочен|просрочен/,
@@ -41,6 +44,8 @@ const SURE: Record<Agent, RegExp[]> = {
   gmail_agent: MAIL.slice(0, 2),
   bitrix_agent: TASKS,
   docs_agent: DOCS,
+  // Narrower than NOTES: «додай нотатку» in reply to a meeting is the meeting's description, not a new note.
+  notes_agent: [/занотуй|нагадай мені|напомни мне|запиши (мені|собі)|(в|у|до) нотат|мої нотат|список справ/],
 };
 
 /**
@@ -68,6 +73,12 @@ export function routeByKeywords(input: AgentInput, bitrix = false): Agent | null
   if (input.replyRef?.startsWith("eventId:")) return otherSure("calendar_agent", lower, bitrix) ? null : "calendar_agent";
   if (input.replyRef?.startsWith("messageId:")) return otherSure("gmail_agent", lower, bitrix) ? null : "gmail_agent";
   if (input.replyRef?.startsWith("taskId:")) return bitrix ? "bitrix_agent" : null;
+  // A reply to a note reminder: «перенеси на вечір», «скасуй» are about the note; only a meeting, an email, a file or a
+  // task named outright takes it elsewhere.
+  if (input.replyRef?.startsWith("noteId:")) {
+    const elsewhere = matches(CALENDAR.slice(0, 2), lower) || matches(SURE.gmail_agent, lower) || matches(DOCS, lower) || (bitrix && matches(TASKS, lower));
+    return elsewhere ? null : "notes_agent";
+  }
   if (input.inputType === "forward" || input.images?.length) return null;
   const text = input.text.toLowerCase();
   // A task is often about a day ("задача на завтра") or a person to write to: task words decide first.
@@ -75,6 +86,8 @@ export function routeByKeywords(input: AgentInput, bitrix = false): Agent | null
   const calendar = matches(CALENDAR, text);
   const mail = matches(MAIL, text);
   const docs = matches(DOCS, text);
+  // «Нагадай мені завтра подзвонити» names a day, not a meeting: a note, unless meeting words are there too.
+  if (matches(NOTES, text) && !matches(SURE.calendar_agent, text) && !mail && !docs) return "notes_agent";
   // Two topics at once («надішли Івану цей документ») — the Supervisor decides.
   if (Number(calendar) + Number(mail) + Number(docs) !== 1) return null;
   return calendar ? "calendar_agent" : mail ? "gmail_agent" : "docs_agent";
@@ -100,14 +113,16 @@ export async function routeWithDecision(
 ): Promise<{ route: RouteChoice; confidence: number } | null> {
   const criteria: Record<string, string> = {
     calendar_agent:
-      "Google Calendar: create, move, cancel or show meetings and events, free or busy time, answer an invitation, the guests of a meeting, reminders before meetings",
+      "Google Calendar: create, move, cancel or show meetings and events, free or busy time, answer an invitation, the guests of a meeting, reminders before meetings, a note added to a meeting",
     gmail_agent: "Email: check, find, read, write, reply, forward, send letters (also to a meeting's participants), drafts, labels, attachments of letters",
     docs_agent: "Google Drive, Sheets and Docs, and files: find, read, create, add rows or text, move, share; a PDF, Word or Excel file sent in the chat",
+    notes_agent:
+      "The owner's own notes: write down a thought, idea or fact, a personal to-do («треба купити…»), a personal reminder at a time («нагадай мені о 18 подзвонити»), find what was written, mark done, archive — not meetings with other people",
     ...(bitrix
       ? { bitrix_agent: "Bitrix24 tasks: the owner's or a colleague's tasks, deadlines, overdue, set a task to a person, comment a task, task analytics and reports" }
       : {}),
     several: "The message asks for work of two or more different kinds above at once (e.g. cancel a meeting AND write an email)",
-    chat: "Greeting, thanks, small talk, a question about the bot itself, or anything not about calendar, email, files or tasks",
+    chat: "Greeting, thanks, small talk, a question about the bot itself, or anything not about calendar, email, files, notes or tasks",
   };
   const state = {
     message: input.text.slice(0, 2000),

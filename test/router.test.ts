@@ -37,7 +37,7 @@ describe("routing by the decision model (TypeSafe Jev)", () => {
     expect(body.model).toBe("typesafe/jev-1.13");
     expect(body.state).toMatchObject({ message: "о 10", bot_last_message: "О котрій завтра?", bot_last_message_by: "calendar_agent", bot_waits_for_answer: true });
     expect(body.questions.pick.type).toBe("choice");
-    expect(Object.keys(body.questions.pick.criteria)).toEqual(["calendar_agent", "gmail_agent", "docs_agent", "several", "chat"]);
+    expect(Object.keys(body.questions.pick.criteria)).toEqual(["calendar_agent", "gmail_agent", "docs_agent", "notes_agent", "several", "chat"]);
     await routeWithDecision(env, input("мої задачі"), {}, true);
     expect(Object.keys((seen[1] as typeof body).questions.pick.criteria)).toContain("bitrix_agent");
   });

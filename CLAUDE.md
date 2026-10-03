@@ -37,7 +37,15 @@ webhook and redirects to the bot; `/api/health` shows the state.
   in 20 000-character parts (`lib/parse.ts` `textPart`, the tools' `part`), searches and folders 25 files a page
   (`nextPage`); with many matches the agent asks the owner to narrow instead of paging through everything), `files.ts`
   (a file as text for a tool: `lib/parse.ts` reads .docx/.xlsx/.pptx/.csv/text without dependencies via `lib/unzip.ts`;
-  a PDF goes to the model as a `file` part with OpenRouter's free pdf-text parser), `memory.ts` (one-session window memory), `html.ts` (the answer as
+  a PDF goes to the model as a `file` part with OpenRouter's free pdf-text parser), `notesTools.ts` (the Notes Agent,
+  `notesPrompt`: the owner's notes, to-dos and personal reminders — `note_add` / `note_search` / `note_update` /
+  `note_archive`; stored by `google/notes.ts` in ONE sheet «Нотатки» in the folder «AI-secretary» on the owner's Drive
+  (scope drive, `OwnerSettings.nt`), made on first use and announced once (again if it was deleted); every cell written
+  as text; nothing is ever deleted — done or archived; a reminder is a signal `note:<id>` in the signal calendar (a
+  repeating one an RRULE series; one occurrence is `<id>_<time>`), `handleReminderEmail` → `sendNoteReminder` with
+  ✅ / ⏰ / 📅 buttons `nt:…` handled in code (`noteButton`); a reply to it carries `[noteId: …]`; the morning report's
+  «📒» block (`notesDigest`, on Mondays the week in numbers); full signal syncs never touch `note:` signals;
+  «додай нотатку» in reply to a meeting stays the meeting's description), `memory.ts` (one-session window memory), `html.ts` (the answer as
   Telegram HTML: Markdown and web tags mapped, only Telegram's tags, proper nesting, safe links, never cut —
   `Telegram.send` splits long text keeping tags whole),
   `route.ts` (the Supervisor's keyword routing table in code: an obvious calendar/mail request, or a reply to the

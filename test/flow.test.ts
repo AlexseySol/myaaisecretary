@@ -223,7 +223,7 @@ describe("agents (the n8n «AI Agent ALL» flow)", () => {
     expect(seen.map(isSupervisor)).toEqual([true, false, true]);
     expect(lastContent(seen[0]!)).toContain("USER: перенеси зустріч з Іваном і напиши йому лист");
     expect(lastContent(seen[0]!)).toContain("---SESSION---");
-    expect(seen[0]!.tools!.map((t) => t.function.name)).toEqual(["calendar_agent", "gmail_agent", "docs_agent", "remember_fact", "forget_fact"]);
+    expect(seen[0]!.tools!.map((t) => t.function.name)).toEqual(["calendar_agent", "gmail_agent", "docs_agent", "notes_agent", "remember_fact", "forget_fact"]);
     expect(lastContent(seen[1]!)).toBe("перенеси зустріч з Іваном і напиши йому лист");
   });
 

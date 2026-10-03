@@ -10,6 +10,7 @@ import { Gmail } from "./gmail";
 import { hasGmailScope, loadOwnerSettings, type OwnerSettings } from "./oauth";
 import { firstTime } from "../session";
 import { DIGEST_PREFIX, type Signal, shadowId } from "./signals";
+import { notesDigest } from "./notes";
 import { eventToChange, type Meeting } from "./sync";
 
 /**
@@ -28,12 +29,13 @@ export const DIGEST_BLOCKS = {
   mail: "📧 Непрочитана пошта",
   ai: "✨ Коротко про пошту (AI)",
   bx: "📋 Задачі Bitrix24",
+  notes: "📒 Нотатки й нагадування",
   tmr: "🌅 Завтра: перша зустріч",
   empty: "📭 Звіт і в день без зустрічей",
 } as const;
 export type DigestBlock = keyof typeof DIGEST_BLOCKS;
 /** On until the owner changes them; only the AI summary is opt-in. A report comes on a day without meetings too. */
-const DEFAULT_BLOCKS: DigestBlock[] = ["inv", "mail", "bx", "tmr", "empty"];
+const DEFAULT_BLOCKS: DigestBlock[] = ["inv", "mail", "bx", "notes", "tmr", "empty"];
 
 export interface DigestChoice {
   on: boolean;
@@ -207,6 +209,7 @@ export async function buildDigest(env: Env, now = Date.now(), force = false): Pr
   }
   if (has("mail") || has("ai")) await safely(() => mailBlock(env, has("ai")));
   if (has("bx")) await safely(() => bitrixBlock(env, now, dayEnd));
+  if (has("notes")) await safely(() => notesDigest(env, now));
   if (has("tmr")) {
     await safely(() => {
       const first = meetings.find((m) => m.start_at >= dayEnd && m.start_at < dayEnd + DAY);

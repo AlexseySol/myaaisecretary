@@ -30,6 +30,8 @@ export interface GEvent {
   created?: string;
   updated?: string;
   recurringEventId?: string;
+  /** RRULE lines of a recurring event (the bot's repeating note reminders). */
+  recurrence?: string[];
   extendedProperties?: { private?: Record<string, string>; shared?: Record<string, string> };
   start?: { dateTime?: string; date?: string; timeZone?: string };
   end?: { dateTime?: string; date?: string; timeZone?: string };

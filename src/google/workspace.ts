@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { expectOk, fetchWithRetry } from "../lib/http";
+import { expectOk, fetchWithRetry, HttpError } from "../lib/http";
 import { getAccessToken, loadGrant } from "./oauth";
 
 /**
@@ -79,6 +79,23 @@ export class Workspace {
     if (page) params.set("pageToken", page);
     const r = await this.json<{ files?: DriveFile[]; nextPageToken?: string }>(`${DRIVE}?${params}`);
     return { files: r.files ?? [], next: r.nextPageToken };
+  }
+
+  /** A file or folder with exactly this name (in `parent`, else anywhere), not in the trash. */
+  async findByName(name: string, type: keyof typeof MIME, parent?: string): Promise<DriveFile | null> {
+    const q = [`name = '${name.replace(/'/g, "\\'")}'`, `mimeType = '${MIME[type]}'`, "trashed = false"];
+    if (parent) q.push(`'${parent.replace(/'/g, "\\'")}' in parents`);
+    return (await this.page(q.join(" and "), undefined, 1)).files[0] ?? null;
+  }
+
+  /** Whether the file is still there and not in the trash. */
+  async alive(id: string): Promise<boolean> {
+    try {
+      return !(await this.json<{ trashed?: boolean }>(`${DRIVE}/${encodeURIComponent(id)}?fields=id,trashed`)).trashed;
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 404) return false;
+      throw err;
+    }
   }
 
   async file(id: string): Promise<DriveFile> {

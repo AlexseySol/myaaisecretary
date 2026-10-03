@@ -165,6 +165,8 @@ export interface OwnerSettings {
   gv?: Partial<Record<"google" | "telegram" | "bitrix", { f?: string; t?: "video" | "animation" | "document"; u?: string }>>;
   /** The last version whose «what is new» the owner got (changelog.ts, bot/news.ts). */
   v?: number;
+  /** The notes sheet «Нотатки» on the owner's Drive (google/notes.ts). */
+  nt?: string;
 }
 
 /** Keys the owner gave the bot in /settings (Bitrix24, Zoom); kept encrypted in the same pinned message. */

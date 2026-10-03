@@ -14,6 +14,7 @@ import { connectLink, hasGoogleAuth, parseGoogleAnswer, verifyState } from "../g
 import { formatTime, toKyivDate } from "../lib/time";
 import type { MailRef } from "../google/gmailPush";
 import type { EventRef } from "../google/sync";
+import { noteButton, type NoteRef } from "../google/notes";
 import { appendBatch } from "../session";
 import { Telegram, TG_DOWNLOAD_LIMIT } from "./api";
 import { readHidden } from "./hidden";
@@ -77,9 +78,10 @@ const replyTextOf = (msg: TgMessage): string | null => msg.reply_to_message?.tex
 
 /** The event or email a bot message is about (hidden in it), so the agent does not have to guess by its title. */
 export function refOf(msg: TgMessage | undefined | null): string | null {
-  const ref = readHidden<EventRef | MailRef>(msg);
+  const ref = readHidden<EventRef | MailRef | NoteRef>(msg);
   if (ref?.k === "ev") return `eventId: ${ref.id}`;
   if (ref?.k === "mail") return `messageId: ${ref.id}`;
+  if (ref?.k === "note") return `noteId: ${ref.id}`;
   return null;
 }
 
@@ -185,6 +187,18 @@ async function handleCallback(env: Env, cq: TgCallbackQuery): Promise<void> {
   if (bx) {
     await new Telegram(env).answerCallback(cq.id, bx[1]!.startsWith("report:") ? "Готую звіт…" : undefined).catch(() => undefined);
     await env.jobs.send({ type: "bitrix", chatId, action: bx[1] as BitrixAction });
+    return;
+  }
+  // ✅ / ⏰ / 📅 under a note reminder: in code, no AI.
+  const nt = /^nt:(done|hour|tmr):(.+)$/.exec(cq.data ?? "");
+  if (nt) {
+    const tg = new Telegram(env);
+    const done = await noteButton(env, nt[1] as "done" | "hour" | "tmr", nt[2]!).catch((err) => {
+      console.warn("note button:", err instanceof Error ? err.message : err);
+      return null;
+    });
+    await tg.answerCallback(cq.id, done?.toast ?? "Нотатку не знайдено в таблиці").catch(() => undefined);
+    if (done && cq.message) await tg.edit(chatId, cq.message.message_id, done.html).catch(() => undefined);
     return;
   }
   if (cq.data === "gclient") {

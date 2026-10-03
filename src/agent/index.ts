@@ -10,7 +10,8 @@ import { calendarTools } from "./calendarTools";
 import { gmailTools } from "./gmailTools";
 import { toTelegramHtml } from "./html";
 import { conversationBlock, conversationHistory, factsBlock, lastBotTurn, loadMemory, memoryTools, pendingAgent, rememberTurn, saveMemory } from "./memory";
-import { bitrixPrompt, calendarPrompt, docsPrompt, gmailPrompt, supervisorPrompt } from "./prompts";
+import { bitrixPrompt, calendarPrompt, docsPrompt, gmailPrompt, notesPrompt, supervisorPrompt } from "./prompts";
+import { notesTools } from "./notesTools";
 import { docsTools } from "./docsTools";
 import { hasWorkspaceScope } from "../google/workspace";
 import { bitrixTools } from "./bitrixTools";
@@ -58,7 +59,7 @@ function withImages(text: string, images: ContentPart[] | undefined): string | C
   return images?.length ? [{ type: "text", text }, ...images] : text;
 }
 
-type AgentName = "calendar_agent" | "gmail_agent" | "bitrix_agent" | "docs_agent";
+type AgentName = "calendar_agent" | "gmail_agent" | "bitrix_agent" | "docs_agent" | "notes_agent";
 
 /** One sub-agent (n8n "Calendar Agent" / "Gmail Agent" sub-workflow) on the user's message, with its own memory. */
 /** One request's run: the model for it, and whether a tool already changed something (then it is never retried). */
@@ -70,7 +71,7 @@ export interface RunContext {
 }
 
 /** Tools that only read; any other tool call changes the calendar or the mailbox. */
-const READ_ONLY = /^(get_|check_free_busy|msg_get|thread_get|draft_get|label_get|attachment_read|find_|list_tasks|task_stats|remember_fact|forget_fact|drive_search|drive_read|sheets_read)/;
+const READ_ONLY = /^(get_|check_free_busy|msg_get|thread_get|draft_get|label_get|attachment_read|find_|list_tasks|task_stats|remember_fact|forget_fact|drive_search|drive_read|sheets_read|note_search)/;
 
 function tracking(ctx: RunContext) {
   return (name: string) => {
@@ -104,6 +105,21 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       input: withImages(userMessage, input.images),
       tools: [...(drive ? docsTools(env) : []), ...memoryTools],
       maxIterations: 12,
+    });
+  }
+  if (name === "notes_agent") {
+    if (!(await hasGoogleAuth(env))) return `Нотатки зберігаються на вашому Google Диску — спершу підключіть Google: ${await connectLink(env)}`;
+    if (!(await hasWorkspaceScope(env).catch(() => false))) {
+      return `Нотатки зберігаються на вашому Google Диску, а доступу до нього немає. Перепідключіть Google з усіма галочками: ${await connectLink(env)}`;
+    }
+    return runAgent(env, {
+      model: ctx.model,
+      onTool: tracking(ctx),
+      system: notesPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock(),
+      history: conversationHistory(),
+      input: withImages(userMessage, input.images),
+      tools: [...notesTools(env), ...memoryTools],
+      maxIterations: 10,
     });
   }
   if (name === "bitrix_agent") {
@@ -213,6 +229,10 @@ export async function runSupervisor(env: Env, input: AgentInput, ctx: RunContext
       subAgent(
         "docs_agent",
         "Docs Agent — Google Drive, Sheets and Docs, and files (PDF, Word, Excel): find, read, summarise, create, add rows or text, move, share. Never deletes.",
+      ),
+      subAgent(
+        "notes_agent",
+        "Notes Agent — the owner's own notes, ideas, personal to-dos and personal reminders («запиши…», «нагадай мені о…», «що я записував…»): add, find, change, mark done, archive. Not meetings.",
       ),
       ...memoryTools,
       ...(bitrixConfigured(env)

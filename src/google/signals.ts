@@ -16,6 +16,8 @@ const NAME = "AI-secretary · сигнали";
 const FOR = "aisFor";
 /** aisFor of the morning report's signal for a day ("digest:2026-10-01"), google/digest.ts. */
 export const DIGEST_PREFIX = "digest:";
+/** aisFor of a note reminder ("note:<note id>"), google/notes.ts. */
+export const NOTE_PREFIX = "note:";
 
 /** One signal wanted in the calendar: key = the meeting id (or a digest key), an email at each of `minutes`. */
 export interface Signal {
@@ -44,11 +46,13 @@ export async function signalCalendar(env: Env): Promise<string | null> {
 
 /** The bot's signal event with this id and its calendar (null when the id is not one of the bot's signals). */
 export async function signalEvent(env: Env, eventId: string): Promise<{ cal: Calendar; ev: GEvent } | null> {
-  if (!/^ais[0-9a-f]{26}$/.test(eventId)) return null;
+  // One day's occurrence of a repeating signal (a note reminder) is «<id>_<time>»: the signal is the series.
+  const base = /^(ais[0-9a-f]{26})(?:_[0-9a-zA-Z]+)?$/.exec(eventId)?.[1];
+  if (!base) return null;
   const sc = (await loadOwnerSettings(env).catch(() => ({ sc: undefined }))).sc;
   if (!sc) return null;
   const cal = new Calendar(env, sc);
-  const ev = await cal.getEvent(eventId).catch(() => null);
+  const ev = await cal.getEvent(base).catch(() => null);
   return ev ? { cal, ev } : null;
 }
 
@@ -112,7 +116,8 @@ export async function syncSignals(env: Env, calendarId: string, wanted: Signal[]
   if (full) {
     for (const e of existing) {
       const target = e.extendedProperties?.private?.[FOR];
-      if (!target || keep.has(e.id)) continue;
+      // Note reminders (google/notes.ts) are kept in step by the notes themselves.
+      if (!target || target.startsWith(NOTE_PREFIX) || keep.has(e.id)) continue;
       drop.add(e.id);
     }
   }

@@ -8,7 +8,8 @@ import { Calendar, type GEvent } from "./calendar";
 import { loadOwnerSettings, type OwnerSettings } from "./oauth";
 import { wakeReady } from "./pubsub";
 import { digestSignals, loadDigestChoice, sendDigestOnce } from "./digest";
-import { DIGEST_PREFIX, type Signal, signalCalendar, signalEvent, syncSignals } from "./signals";
+import { DIGEST_PREFIX, NOTE_PREFIX, type Signal, signalCalendar, signalEvent, syncSignals } from "./signals";
+import { sendNoteReminder } from "./notes";
 import { type GMessage, Gmail, toMailMessage } from "./gmail";
 import { type EventRef, eventToChange, listMeetings, type Meeting } from "./sync";
 
@@ -235,6 +236,12 @@ export async function handleReminderEmail(env: Env, m: GMessage, now = Date.now(
   const signal = await signalEvent(env, id);
   const target = signal?.ev.extendedProperties?.private?.aisFor ?? null;
   const gmail = new Gmail(env);
+  if (target?.startsWith(NOTE_PREFIX) && signal) {
+    // A note's reminder (one occurrence of a repeating one has its own id).
+    await sendNoteReminder(env, signal.cal.calendarId, id, target, now);
+    await gmail.trash(m.id).catch(() => undefined);
+    return true;
+  }
   if (target?.startsWith(DIGEST_PREFIX) && signal) {
     // One report per day whichever copy of the bot got the email.
     await sendDigestOnce(env, target, now);
