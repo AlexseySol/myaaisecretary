@@ -328,7 +328,7 @@ describe("«🔁 Налаштувати»: every link of the chain", () => {
   });
 
   it("all set: every step ✅ and no test event left in the calendar", async () => {
-    await connectGoogle({ scope: `${FULL_SCOPE} https://www.googleapis.com/auth/calendar.app.created` });
+    await connectGoogle({ scope: `${FULL_SCOPE} https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/calendar.freebusy` });
     const shadows = new Map<string, Record<string, unknown>>();
     const calls = mockFetch([
       fakePubSub().route,

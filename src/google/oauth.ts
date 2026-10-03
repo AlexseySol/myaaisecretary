@@ -13,6 +13,8 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   // Only calendars the bot creates itself: its signal calendar for Telegram reminders (google/signals.ts).
   "https://www.googleapis.com/auth/calendar.app.created",
+  // Other people's busy times (only when, not what): whether a guest is free before a meeting is set (agent/calendarTools.ts).
+  "https://www.googleapis.com/auth/calendar.freebusy",
   // Read/write/send Gmail except permanently deleting; plus managing label definitions.
   // NOTE: these are Google "restricted" scopes. A published but unverified app still works for its single owner
   // (Google shows an "unverified app" warning); a consent screen left in "Testing" expires grants after 7 days.
@@ -39,6 +41,7 @@ export function missingScopes(scope: string): string[] {
     ["gmail.modify", "пошта — «Читати, створювати, надсилати й видаляти листи Gmail» (Read, compose, and send emails)"],
     ["pubsub", "сигнали — «Pub/Sub» (View and manage Pub/Sub topics and subscriptions)"],
     ["calendar.app.created", "календар сигналів — «Створювати додаткові календарі» (Make secondary Google calendars…)"],
+    ["calendar.freebusy", "зайнятість людей — «Переглядати доступність у календарях» (See the availability on Google Calendars you have access to)"],
     ["drive.appdata", "памʼять — «Дані застосунку на Диску» (See, create, and delete its own configuration data in your Google Drive)"],
     [
       "https://www.googleapis.com/auth/drive",
@@ -326,6 +329,11 @@ export async function hasGoogleAuth(env: Env): Promise<boolean> {
 /** Whether the grant includes the bot's hidden Drive folder (grants from before the memory feature do not). */
 export async function hasDriveScope(env: Env): Promise<boolean> {
   return !!(await loadGrant(env))?.scope.includes("drive.appdata");
+}
+
+/** Whether the grant lets the bot see other people's busy times (connections from before it do not). */
+export async function hasFreeBusyScope(env: Env): Promise<boolean> {
+  return !!(await loadGrant(env).catch(() => null))?.scope.includes("calendar.freebusy");
 }
 
 /** Whether the grant includes Gmail (the owner may have unticked it on Google's screen). */

@@ -194,6 +194,23 @@ export class Calendar {
     return busy;
   }
 
+  /**
+   * Other people's busy times (Google's free/busy: only when, never what; scope calendar.freebusy). A person whose
+   * calendar is not shared with the owner comes back with `error` — colleagues in the same organisation usually are.
+   */
+  async othersBusy(emails: string[], timeMin: string, timeMax: string): Promise<Record<string, { busy: { start: string; end: string }[] } | { error: string }>> {
+    const r = await this.request<{ calendars?: Record<string, { busy?: { start: string; end: string }[]; errors?: { reason?: string }[] }> }>("/freeBusy", {
+      method: "POST",
+      body: JSON.stringify({ timeMin, timeMax, timeZone: "Europe/Kyiv", items: emails.map((id) => ({ id })) }),
+    });
+    const out: Record<string, { busy: { start: string; end: string }[] } | { error: string }> = {};
+    for (const email of emails) {
+      const c = r.calendars?.[email] ?? r.calendars?.[email.toLowerCase()];
+      out[email] = !c ? { error: "notFound" } : c.errors?.length ? { error: c.errors[0]!.reason ?? "unknown" } : { busy: c.busy ?? [] };
+    }
+    return out;
+  }
+
   listEvents(params: Record<string, string>): Promise<GEventList> {
     return this.request<GEventList>(`${this.base}/events?${new URLSearchParams(params)}`);
   }

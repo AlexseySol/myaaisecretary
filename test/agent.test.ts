@@ -90,6 +90,45 @@ describe("calendar tools", () => {
     expect(parseAttendees("")).toEqual([]);
   });
 
+  it("check_free_busy sees each guest's busy time: conflicts at the meeting's time, windows free for all, hidden calendars said", async () => {
+    await connectGoogle();
+    let asked: unknown;
+    mockFetch([
+      (url, init) => {
+        if (url.pathname === "/calendar/v3/calendars/primary/events") return Response.json({ items: [] });
+        if (url.pathname !== "/calendar/v3/freeBusy") return undefined;
+        asked = JSON.parse(init.bodyText);
+        return Response.json({
+          calendars: {
+            "oleg@acme.ua": { busy: [{ start: "2099-10-01T15:00:00+03:00", end: "2099-10-01T16:00:00+03:00" }] },
+            "guest@gmail.com": { errors: [{ domain: "global", reason: "notFound" }] },
+          },
+        });
+      },
+    ]);
+    const { env } = testEnv();
+    const check = (scope: boolean) => calendarTools(env, "o.kovalenko@acme.ua", { freeBusyScope: scope }).find((t) => t.spec.name === "check_free_busy")!;
+    const args = {
+      timeMin: "2099-10-01T09:00:00+03:00",
+      timeMax: "2099-10-01T19:00:00+03:00",
+      attendeesJson: '{"email":"o.kovalenko@acme.ua"},{"email":"oleg@acme.ua"},{"email":"guest@gmail.com"}',
+      proposedStart: "2099-10-01T15:00:00+03:00",
+      proposedEnd: "2099-10-01T16:00:00+03:00",
+      durationMinutes: 60,
+    };
+    const r = (await check(true).run(args)) as { conflicts: unknown[]; people: { email: string; visible: boolean }[]; free: { from: string; to: string }[] };
+    // The owner is not asked about; only the guests.
+    expect((asked as { items: { id: string }[] }).items.map((i) => i.id)).toEqual(["oleg@acme.ua", "guest@gmail.com"]);
+    expect(r.conflicts).toEqual([{ who: "oleg@acme.ua", busy: "15:00–16:00" }]);
+    expect(r.people.find((p) => p.email === "guest@gmail.com")).toMatchObject({ visible: false });
+    expect(r.free.map((w) => `${w.from}–${w.to}`)).toEqual(["09:00–15:00", "16:00–19:00"]);
+    // Without the permission Google is not asked; the agent is told why.
+    asked = undefined;
+    const old = (await check(false).run(args)) as { people: { why: string }[] };
+    expect(asked).toBeUndefined();
+    expect(old.people[0]!.why).toContain("перепідключити Google");
+  });
+
   it("a meeting is never made without knowing who is at it: no guests → ask the owner; «без учасників» → made", async () => {
     await connectGoogle();
     const inserted: unknown[] = [];

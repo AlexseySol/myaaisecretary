@@ -136,7 +136,7 @@ webhook and redirects to the bot; `/api/health` shows the state.
 - Keep the deployment generic (no company-specific names or data). The app boots with only `OWNER_TELEGRAM_ID`,
   `TELEGRAM_BOT_TOKEN`, `OPENROUTER_API_KEY`; Google keys are collected at deploy but the app
   must still start without them; new features must be optional or derived.
-- The agents act as the n8n prompts say: calendar requests are carried out directly — but a meeting needs what, when and WHO from the owner: the create tools refuse without a guest unless `withoutGuests` (the owner said so), and a «нагадай мені» is a note, never a meeting; sending or trashing mail
+- The agents act as the n8n prompts say: calendar requests are carried out directly — but a meeting needs what, when and WHO from the owner: the create tools refuse without a guest unless `withoutGuests` (the owner said so), and a «нагадай мені» is a note, never a meeting; before a meeting with people `check_free_busy` gets the guests (`attendeesJson`, `proposedStart/End`) and Google's free/busy (scope calendar.freebusy, `Calendar.othersBusy` — only when, never what) gives each guest's busy times, `conflicts` and windows `free` for all; a busy guest → the agent asks before creating, a hidden calendar is said, not guessed; sending or trashing mail
   needs a preview and the owner's "yes" in the conversation. Keep the bot's own Calendar writes silent: set
   `aisStart` in the same write (or `aisBotCancel` before a delete).
 - Keep the Vercel `api/*` files and the docs' URLs in sync when adding an endpoint. Do not add other platforms.

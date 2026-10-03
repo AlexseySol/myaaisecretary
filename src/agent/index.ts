@@ -1,7 +1,7 @@
 import { loadDirectory } from "../bot/contacts";
 import { loadOwner } from "../bot/owner";
 import { bitrixConfigured, type Env } from "../env";
-import { connectLink, hasGmailScope, hasGoogleAuth } from "../google/oauth";
+import { connectLink, hasFreeBusyScope, hasGmailScope, hasGoogleAuth } from "../google/oauth";
 import type { ContentPart } from "../llm/openrouter";
 import { HttpError } from "../lib/http";
 import { esc, Telegram } from "../telegram/api";
@@ -150,7 +150,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
           system: calendarPrompt(owner, await loadDirectory(env), now) + factsBlock() + conversationBlock(),
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
-          tools: [...calendarTools(env, owner.email, { currentText: input.text }), ...memoryTools],
+          tools: [...calendarTools(env, owner.email, { currentText: input.text, freeBusyScope: await hasFreeBusyScope(env) }), ...memoryTools],
           maxIterations: 10,
         })
       : await runAgent(env, {

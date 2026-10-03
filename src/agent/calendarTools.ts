@@ -114,7 +114,7 @@ export function freeWindows(busy: { start: string; end: string }[], from: number
   return out.filter((w, i) => out.findIndex((x) => x.start === w.start) === i);
 }
 
-export function calendarTools(env: Env, ownerEmail: string | null, opts: { currentText?: string } = {}): Tool[] {
+export function calendarTools(env: Env, ownerEmail: string | null, opts: { currentText?: string; freeBusyScope?: boolean } = {}): Tool[] {
   const cal = new Calendar(env);
   let deleted = 0;
 
@@ -191,17 +191,57 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
       spec: {
         name: "check_free_busy",
         description:
-          "Check the owner's busy times and free windows for a time range. Use when user asks 'Am I free at...?', to suggest times when none was given, or before creating a meeting to check for conflicts. Required params: timeMin and timeMax in " + ISO + ". Optional: durationMinutes — free windows at least this long (default 30). Free windows are within 09:00–19:00 Kyiv time, never in the past.",
+          "Check busy times and free windows for a time range — the owner's and, with attendeesJson, each guest's (Google free/busy: only when, never what). Use to answer 'Am I free…?', to suggest times, and ALWAYS before creating a meeting with people. Required: timeMin, timeMax (" + ISO + "). Optional: attendeesJson (the guests), proposedStart / proposedEnd (the meeting's time — the answer lists who is busy then in `conflicts`), durationMinutes (default 30). `free` = windows free for the owner AND every guest whose calendar is visible, 09:00–19:00 Kyiv, never in the past. A guest with visible:false — their calendar is not shared, only the owner's was checked.",
         parameters: object(
-          { timeMin: s("Start of time range to check"), timeMax: s("End of time range to check"), durationMinutes: { type: "integer", description: "Meeting length, minutes" } },
+          {
+            timeMin: s("Start of time range to check"),
+            timeMax: s("End of time range to check"),
+            attendeesJson: s('The guests, e.g. {"email":"oleg@example.com"},{"email":"maria@example.com"}'),
+            proposedStart: s("The meeting's start, " + ISO + " — to list conflicts"),
+            proposedEnd: s("The meeting's end, " + ISO),
+            durationMinutes: { type: "integer", description: "Meeting length, minutes" },
+          },
           ["timeMin", "timeMax"],
         ),
       },
       async run(a) {
-        const busy = await cal.freeBusy(str(a, "timeMin"), str(a, "timeMax"));
-        const free = freeWindows(busy, Date.parse(str(a, "timeMin")), Date.parse(str(a, "timeMax")), Number(a.durationMinutes) || 30);
+        const timeMin = str(a, "timeMin");
+        const timeMax = str(a, "timeMax");
+        const own = (ownerEmail ?? "").toLowerCase();
+        const guests = [...new Set(parseAttendees(a.attendeesJson ?? a.attendees).map((g) => g.email.toLowerCase()))].filter((e) => e && e !== own);
+        const busy = await cal.freeBusy(timeMin, timeMax);
+        const people: { email: string; visible: boolean; busy?: { start: string; end: string }[]; why?: string }[] = [];
+        if (guests.length) {
+          if (!opts.freeBusyScope) {
+            for (const email of guests) people.push({ email, visible: false, why: "немає дозволу бачити зайнятість — власнику треба перепідключити Google з усіма галочками" });
+          } else {
+            const others = await cal.othersBusy(guests, timeMin, timeMax).catch((err) => {
+              console.warn("gcal freeBusy:", err instanceof Error ? err.message : err);
+              return null;
+            });
+            for (const email of guests) {
+              const r = others?.[email];
+              if (r && "busy" in r) people.push({ email, visible: true, busy: r.busy });
+              else people.push({ email, visible: false, why: r ? "календар цієї людини не відкритий для власника" : "Google не відповів" });
+            }
+          }
+        }
+        const all = [...busy, ...people.flatMap((p) => p.busy ?? [])];
+        const free = freeWindows(all, Date.parse(timeMin), Date.parse(timeMax), Number(a.durationMinutes) || 30);
+        const ps = Date.parse(str(a, "proposedStart"));
+        const pe = Date.parse(str(a, "proposedEnd")) || ps + 60 * MINUTE;
+        const overlaps = (list: { start: string; end: string }[]) => list.filter((b) => Date.parse(b.start) < pe && Date.parse(b.end) > ps);
+        const span = (b: { start: string; end: string }) => `${formatTime(new Date(b.start))}–${formatTime(new Date(b.end))}`;
+        const conflicts = Number.isNaN(ps)
+          ? undefined
+          : [
+              ...overlaps(busy).map((b) => ({ who: "owner", busy: span(b) })),
+              ...people.flatMap((p) => overlaps(p.busy ?? []).map((b) => ({ who: p.email, busy: span(b) }))),
+            ];
         return {
           busy: busy.map((b) => ({ start: b.start, end: b.end })),
+          ...(people.length ? { people: people.map((p) => ({ email: p.email, visible: p.visible, ...(p.busy ? { busy: p.busy.map(span) } : {}), ...(p.why ? { why: p.why } : {}) })) } : {}),
+          ...(conflicts ? { conflicts } : {}),
           free: free.map((w) => ({ day: new Date(w.start).toISOString().slice(0, 10), from: formatTime(new Date(w.start)), to: formatTime(new Date(w.end)), start: new Date(w.start).toISOString() })),
         };
       },

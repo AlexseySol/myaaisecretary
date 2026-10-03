@@ -7,7 +7,7 @@ import { connectGoogle, GMAIL_SCOPE, mockFetch, resetInstance, testEnv, tgCalls 
 beforeEach(() => resetInstance());
 afterEach(() => vi.restoreAllMocks());
 
-const ALL = `${GMAIL_SCOPE} https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/pubsub https://www.googleapis.com/auth/calendar.app.created`;
+const ALL = `${GMAIL_SCOPE} https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/pubsub https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/calendar.freebusy`;
 
 describe("«what is new» after a new version", () => {
   it("every release line is written for every owner: no test names, a known heading", async () => {
