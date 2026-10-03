@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { parseAttendees } from "../src/agent/calendarTools";
+import { calendarTools, parseAttendees } from "../src/agent/calendarTools";
 import { gmailTools } from "../src/agent/gmailTools";
 import { toTelegramHtml } from "../src/agent/html";
 import { ModelError, runAgent, type Tool } from "../src/agent/runner";
@@ -88,6 +88,29 @@ describe("calendar tools", () => {
     expect(parseAttendees(["a@x.ua", { email: "b@y.ua" }])).toEqual([{ email: "a@x.ua" }, { email: "b@y.ua" }]);
     expect(parseAttendees("a@x.ua, b@y.ua")).toEqual([{ email: "a@x.ua" }, { email: "b@y.ua" }]);
     expect(parseAttendees("")).toEqual([]);
+  });
+
+  it("a meeting is never made without knowing who is at it: no guests → ask the owner; «без учасників» → made", async () => {
+    await connectGoogle();
+    const inserted: unknown[] = [];
+    mockFetch([
+      (url, init) => {
+        if (url.pathname !== "/calendar/v3/calendars/primary/events" || init.method !== "POST") return undefined;
+        inserted.push(JSON.parse(init.bodyText));
+        return Response.json({ id: "ev1", status: "confirmed" });
+      },
+    ]);
+    const { env } = testEnv();
+    const create = calendarTools(env, "o.kovalenko@acme.ua").find((t) => t.spec.name === "create_event_google_meet")!;
+    const when = { summary: "Бюджет", startDateTime: "2099-10-01T10:00:00+03:00", endDateTime: "2099-10-01T11:00:00+03:00" };
+    // Only the owner: not made, the agent is told to ask.
+    expect(JSON.stringify(await create.run({ ...when, attendeesJson: '{"email":"o.kovalenko@acme.ua"}' }))).toContain("Хто буде на зустрічі");
+    expect(JSON.stringify(await create.run(when))).toContain("Хто буде на зустрічі");
+    expect(inserted).toHaveLength(0);
+    // A guest named, or the owner said there are none.
+    await create.run({ ...when, attendeesJson: '{"email":"o.kovalenko@acme.ua"},{"email":"o.melnyk@acme.ua"}' });
+    await create.run({ ...when, withoutGuests: true });
+    expect(inserted).toHaveLength(2);
   });
 });
 

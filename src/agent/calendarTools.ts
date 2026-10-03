@@ -137,6 +137,25 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
     };
   };
 
+  /**
+   * The owner always says who is at a meeting: without other guests a meeting is made only when the owner said so
+   * (withoutGuests) — otherwise the agent is told to ask first, never to guess.
+   */
+  const guestsMissing = (a: Record<string, unknown>): { error: string } | null => {
+    const own = (ownerEmail ?? "").toLowerCase();
+    const guests = parseAttendees(a.attendeesJson ?? a.attendees).filter((g) => g.email.toLowerCase() !== own);
+    if (guests.length || a.withoutGuests === true || a.withoutGuests === "true") return null;
+    return {
+      error:
+        "Зустріч НЕ створено: не відомо, хто буде на зустрічі. Спитай власника: «👥 Хто буде на зустрічі? Напишіть імена чи email (або «без учасників»)». " +
+        "withoutGuests=true — лише якщо власник сам сказав, що інших учасників немає.",
+    };
+  };
+  const WITHOUT_GUESTS = {
+    type: "boolean",
+    description: "true ONLY when the owner said in this conversation that nobody else takes part (just for him / без учасників). Never guess.",
+  };
+
   const tools: Tool[] = [
     {
       spec: {
@@ -191,7 +210,7 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
       spec: {
         name: "create_event_google_meet",
         description:
-          "Create a Google Calendar event WITH a Google Meet video conferencing link. Use this tool by DEFAULT for any meeting creation unless user explicitly asks for Zoom. Required params: summary (title), startDateTime, endDateTime (" + ISO + "), description (can be empty string). Optional: attendeesJson (comma-separated JSON objects like {\"email\":\"user@mail.com\"},{\"email\":\"user2@mail.com\"} — omit entirely if no attendees).",
+          "Create a Google Calendar event WITH a Google Meet video conferencing link. Use this tool by DEFAULT for any meeting creation unless user explicitly asks for Zoom. Required params: summary (title), startDateTime, endDateTime (" + ISO + "), description (can be empty string). Attendees: attendeesJson (comma-separated JSON objects like {\"email\":\"user@mail.com\"},{\"email\":\"user2@mail.com\"}); without other guests the event is created only with withoutGuests=true, when the owner said so.",
         parameters: object(
           {
             summary: s("Meeting title or topic. Example: Зустріч з Дмитром"),
@@ -199,11 +218,14 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
             startDateTime: s("Start time, " + ISO),
             endDateTime: s("End time, " + ISO + ". Default duration 1 hour"),
             attendeesJson: s('Comma-separated JSON attendee objects. Example: {"email":"dmytro@example.com"},{"email":"user@mail.com"}'),
+            withoutGuests: WITHOUT_GUESTS,
           },
           ["summary", "startDateTime", "endDateTime"],
         ),
       },
       async run(a) {
+        const missing = guestsMissing(a);
+        if (missing) return missing;
         const body = createBody(a, {
           description: str(a, "description"),
           conferenceData: { createRequest: { requestId: `meet-${randomId(8)}`, conferenceSolutionKey: { type: "hangoutsMeet" } } },
@@ -224,11 +246,14 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
             startDateTime: s("Start time, " + ISO),
             endDateTime: s("End time, " + ISO),
             attendeesJson: s('Comma-separated JSON attendee objects. Example: {"email":"user@mail.com"}'),
+            withoutGuests: WITHOUT_GUESTS,
           },
           ["summary", "zoomJoinUrl", "startDateTime", "endDateTime"],
         ),
       },
       async run(a) {
+        const missing = guestsMissing(a);
+        if (missing) return missing;
         const url = str(a, "zoomJoinUrl");
         const body = createBody(a, { description: str(a, "descriptionWithZoom") || `Zoom: ${url}`, location: url });
         return brief(await cal.insertEvent(body));
