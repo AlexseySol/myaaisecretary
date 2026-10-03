@@ -133,6 +133,9 @@ class FakeTelegram {
       case "sendMessage":
         return this.message(String(body.text));
       case "editMessageText": {
+        // Like Telegram: the same text again is refused.
+        const before = this.messages.get(Number(body.message_id));
+        if (before && before.text === String(body.text) && !body.reply_markup) throw new Error("Bad Request: message is not modified");
         const edited = this.message(String(body.text), Number(body.message_id));
         // Telegram returns the edited text in getChat.pinned_message too.
         if (this.pinned?.message_id === edited.message_id) this.pinned = edited;

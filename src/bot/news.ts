@@ -1,6 +1,6 @@
 import { CURRENT_VERSION, RELEASES } from "../changelog";
 import type { Env } from "../env";
-import { connectLink, loadGrant, loadOwnerSettings, missingScopes, saveOwnerSettings } from "../google/oauth";
+import { claimNewsVersion, connectLink, loadGrant, loadOwnerSettings, missingScopes, saveOwnerSettings } from "../google/oauth";
 import { esc, Telegram } from "../telegram/api";
 import type { InlineKeyboard } from "../telegram/types";
 
@@ -18,6 +18,9 @@ export async function announceUpdate(env: Env): Promise<boolean> {
   // It starts at the current version when its pinned message is first written (oauth.ts writeVault) — so no message
   // appears in the chat just for this.
   if (seen === undefined && !grant) return false;
+
+  // Several wake-ups right after a deploy run at once: only the copy that claims the version sends the message.
+  if (!(await claimNewsVersion(env, CURRENT_VERSION))) return false;
 
   const releases = RELEASES.filter((r) => r.v > (seen ?? 0)).slice(0, 3);
   const added = releases.flatMap((r) => r.added ?? []);
@@ -39,8 +42,12 @@ export async function announceUpdate(env: Env): Promise<boolean> {
     keyboard.push([{ text: "🔎 Перевірити нагадування", callback_data: "set:wake" }]);
   }
   lines.push("", todo.length ? `⚠️ <b>Що зробити:</b>\n${todo.map((t) => `• ${esc(t)}`).join("\n")}` : "✅ Нічого робити не треба — усе вже працює.");
-  await new Telegram(env).send(env.OWNER_TELEGRAM_ID, lines.join("\n"), keyboard.length ? { keyboard } : {});
-  // Remembered only once it was sent: a failed send is tried again at the next wake-up.
-  await saveOwnerSettings(env, { ...(await loadOwnerSettings(env)), v: CURRENT_VERSION });
+  try {
+    await new Telegram(env).send(env.OWNER_TELEGRAM_ID, lines.join("\n"), keyboard.length ? { keyboard } : {});
+  } catch (err) {
+    // Not sent: given back, so the next wake-up tries again.
+    await saveOwnerSettings(env, { ...(await loadOwnerSettings(env)), v: seen }).catch(() => undefined);
+    throw err;
+  }
   return true;
 }

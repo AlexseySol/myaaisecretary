@@ -186,7 +186,8 @@ interface GrantData {
   x?: string;
 }
 
-let grantCache: { at: number; grant: GoogleGrant | null; messageId: number | null; data: GrantData | null } | null = null;
+type GrantCache = { at: number; grant: GoogleGrant | null; messageId: number | null; data: GrantData | null };
+let grantCache: GrantCache | null = null;
 let accessCache: { token: string; expiresAt: number } | null = null;
 const GRANT_TTL_MS = 60_000;
 
@@ -282,6 +283,38 @@ export async function saveOwnerSettings(env: Env, settings: OwnerSettings): Prom
   await loadGrant(env);
   await writeVault(env, { ...(grantCache?.data ?? { k: "google" }), s: settings });
   return true;
+}
+
+/**
+ * Claims «what is new» for `version` once among parallel copies of the bot (several wake-ups after a deploy run at
+ * the same time): each reads the pinned message afresh and writes the same new text into it; Telegram accepts the first
+ * edit and answers «message is not modified» to the rest. Returns the version seen before, or null when another copy
+ * already claimed it (or there is nothing to announce).
+ */
+export async function claimNewsVersion(env: Env, version: number): Promise<{ seen: number | undefined } | null> {
+  grantCache = null;
+  await loadGrant(env);
+  const cache = grantCache as GrantCache | null;
+  const data = cache?.data;
+  if (!cache?.messageId || !data || (data.s?.v ?? 0) >= version) return null;
+  const seen = data.s?.v;
+  const next: GrantData = { ...data, s: { ...data.s, v: version } };
+  try {
+    await new Telegram(env).call("editMessageText", {
+      chat_id: env.OWNER_TELEGRAM_ID,
+      message_id: cache.messageId,
+      text: vaultMessage(next, cache.grant?.email ?? null),
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+    });
+  } catch (err) {
+    // Another copy got there first; what this one read may be older than the pinned message now.
+    grantCache = null;
+    if (err instanceof HttpError && err.body.includes("message is not modified")) return null;
+    throw err;
+  }
+  grantCache = { ...cache, at: Date.now(), data: next };
+  return { seen };
 }
 
 export async function hasGoogleAuth(env: Env): Promise<boolean> {

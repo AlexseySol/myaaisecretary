@@ -45,6 +45,17 @@ describe("«what is new» after a new version", () => {
     expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("Нічого робити не треба");
   });
 
+  it("parallel wake-ups after a deploy send it once", async () => {
+    await connectGoogle({ scope: ALL });
+    const calls = mockFetch([]);
+    const { env } = testEnv();
+    await saveOwnerSettings(env, { p: "ok", v: CURRENT_VERSION - 1 });
+    const results = await Promise.all([announceUpdate(env), announceUpdate(env), announceUpdate(env)]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(tgCalls(calls, "sendMessage").filter((m) => String(m.text).includes("Бот оновлено"))).toHaveLength(1);
+    expect((await loadOwnerSettings(env)).v).toBe(CURRENT_VERSION);
+  });
+
   it("a new owner (nothing connected yet) starts quietly at the current version", async () => {
     const calls = mockFetch([]);
     const { env } = testEnv();
