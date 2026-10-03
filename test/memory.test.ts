@@ -222,10 +222,10 @@ describe("old requests in the memory are never carried out again", () => {
         if (url.pathname.endsWith("/calendars/primary/events")) {
           return Response.json({
             items: [
-              { id: "a", status: "confirmed", start: { dateTime: "2026-10-02T10:00:00+03:00" }, end: { dateTime: "2026-10-02T11:00:00+03:00" } },
-              { id: "b", status: "confirmed", transparency: "transparent", start: { dateTime: "2026-10-02T12:00:00+03:00" }, end: { dateTime: "2026-10-02T13:00:00+03:00" } },
-              { id: "c", status: "confirmed", attendees: [{ email: "me@x.ua", self: true, responseStatus: "declined" }], start: { dateTime: "2026-10-02T15:00:00+03:00" }, end: { dateTime: "2026-10-02T16:00:00+03:00" } },
-              { id: "d", status: "confirmed", start: { date: "2026-10-02" }, end: { date: "2026-10-03" } },
+              { id: "a", status: "confirmed", start: { dateTime: "2099-10-02T10:00:00+03:00" }, end: { dateTime: "2099-10-02T11:00:00+03:00" } },
+              { id: "b", status: "confirmed", transparency: "transparent", start: { dateTime: "2099-10-02T12:00:00+03:00" }, end: { dateTime: "2099-10-02T13:00:00+03:00" } },
+              { id: "c", status: "confirmed", attendees: [{ email: "me@x.ua", self: true, responseStatus: "declined" }], start: { dateTime: "2099-10-02T15:00:00+03:00" }, end: { dateTime: "2099-10-02T16:00:00+03:00" } },
+              { id: "d", status: "confirmed", start: { date: "2099-10-02" }, end: { date: "2026-10-03" } },
             ],
           });
         }
@@ -235,9 +235,9 @@ describe("old requests in the memory are never carried out again", () => {
     const { env } = testEnv();
     const { calendarTools } = await import("../src/agent/calendarTools");
     const tool = calendarTools(env, "me@x.ua").find((t) => t.spec.name === "check_free_busy")!;
-    const out = (await tool.run({ timeMin: "2026-10-02T00:00:00+03:00", timeMax: "2026-10-02T23:59:00+03:00", durationMinutes: 30 })) as { busy: unknown[]; free: unknown[] };
+    const out = (await tool.run({ timeMin: "2099-10-02T00:00:00+03:00", timeMax: "2099-10-02T23:59:00+03:00", durationMinutes: 30 })) as { busy: unknown[]; free: unknown[] };
     expect(freeBusyCalled).toBe(false);
-    expect(out.busy).toEqual([{ start: "2026-10-02T10:00:00+03:00", end: "2026-10-02T11:00:00+03:00" }]);
+    expect(out.busy).toEqual([{ start: "2099-10-02T10:00:00+03:00", end: "2099-10-02T11:00:00+03:00" }]);
     expect(out.free.length).toBeGreaterThan(0);
   });
 

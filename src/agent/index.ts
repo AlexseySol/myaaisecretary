@@ -9,12 +9,12 @@ import type { InlineKeyboard } from "../telegram/types";
 import { calendarTools } from "./calendarTools";
 import { gmailTools } from "./gmailTools";
 import { toTelegramHtml } from "./html";
-import { conversationBlock, conversationHistory, factsBlock, loadMemory, memoryTools, pendingAgent, rememberTurn, saveMemory } from "./memory";
+import { conversationBlock, conversationHistory, factsBlock, lastBotTurn, loadMemory, memoryTools, pendingAgent, rememberTurn, saveMemory } from "./memory";
 import { bitrixPrompt, calendarPrompt, docsPrompt, gmailPrompt, supervisorPrompt } from "./prompts";
 import { docsTools } from "./docsTools";
 import { hasWorkspaceScope } from "../google/workspace";
 import { bitrixTools } from "./bitrixTools";
-import { routeByKeywords, routeFollowUp } from "./route";
+import { routeByKeywords, routeFollowUp, routeWithDecision } from "./route";
 import { ModelError, runAgent, str, type Tool } from "./runner";
 
 /**
@@ -162,8 +162,23 @@ export async function runSupervisor(env: Env, input: AgentInput, ctx: RunContext
   // pass it on and repeat the answer — two model calls for nothing).
   // The owner answering the bot's own question («Яка назва?» → «ТЕСТ») goes back to the agent that asked, unless it is
   // clearly a new request of another kind.
+  const bitrix = bitrixConfigured(env);
   const waiting = input.replyRef || input.inputType === "callback" ? null : (pendingAgent() as AgentName | null);
-  const direct = waiting ? routeFollowUp(input, waiting, bitrixConfigured(env)) : routeByKeywords(input, bitrixConfigured(env));
+  // 1. A reply to the bot's own notice names its subject exactly: plain code.
+  let direct: AgentName | null = input.replyRef ? (routeByKeywords(input, bitrix) as AgentName | null) : null;
+  let decided = !!direct;
+  // 2. The decision model (Jev) picks the agent, with the conversation in view (pictures go to the Supervisor, which sees them).
+  if (!decided && input.inputType !== "callback" && !input.images?.length) {
+    const last = lastBotTurn();
+    const pick = await routeWithDecision(env, input, { lastBot: last?.text, lastAgent: last?.agent, waiting: !!waiting }, bitrix);
+    if (pick) {
+      decided = true;
+      direct = pick.route === "several" || pick.route === "chat" ? null : (pick.route as AgentName);
+      console.log("route:", pick.route, pick.confidence.toFixed(2));
+    }
+  }
+  // 3. Without it (off, failed, unsure): the keyword table and the follow-up rule, as before.
+  if (!decided) direct = waiting ? (routeFollowUp(input, waiting, bitrix) as AgentName | null) : (routeByKeywords(input, bitrix) as AgentName | null);
   if (direct) {
     const output = await runSubAgent(env, direct, userMessageOf(chatInput), input, now, ctx);
     return output;

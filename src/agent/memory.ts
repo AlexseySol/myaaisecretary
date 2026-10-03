@@ -123,6 +123,13 @@ export function conversationBlock(now = Date.now()): string {
   );
 }
 
+/** The bot's latest answer in this conversation (last 30 minutes): its text and the agent that gave it. */
+export function lastBotTurn(now = Date.now()): { text: string; agent?: string } | null {
+  const last = state.log.at(-1);
+  if (!last || last.who !== "b" || now - last.t > PENDING_MS) return null;
+  return { text: last.text, ...(last.a ? { agent: last.a } : {}) };
+}
+
 /** The agent whose question is still waiting for the owner's answer (null when the bot asked nothing lately). */
 export function pendingAgent(now = Date.now()): string | null {
   const last = state.log.at(-1);

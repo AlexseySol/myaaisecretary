@@ -19,6 +19,8 @@ export const testConfig: Config = {
   LLM_MODEL: "test/strong-model",
   AGENT_MODEL: "test/agent-model",
   VISION_MODEL: "test/vision-model",
+  // Off in tests unless a test turns it on (the decisions endpoint is mocked there).
+  ROUTER_MODEL: "",
   LLM_MODEL_SUMMARY: "test/summary-model",
   STT_MODEL: "test/audio-model",
   REMINDER_MINUTES: [30, 10],
@@ -263,7 +265,7 @@ export interface LlmRequest {
  */
 export function openRouter(script: (req: LlmRequest, n: number) => Response, seen: LlmRequest[] = []): Route {
   return (url, init) => {
-    if (url.hostname !== "openrouter.ai") return undefined;
+    if (url.hostname !== "openrouter.ai" || url.pathname.includes("/decisions")) return undefined;
     const req = JSON.parse(init.bodyText) as LlmRequest;
     seen.push(req);
     return script(req, seen.length);

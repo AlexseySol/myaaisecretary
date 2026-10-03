@@ -41,7 +41,12 @@ webhook and redirects to the bot; `/api/health` shows the state.
   Telegram HTML: Markdown and web tags mapped, only Telegram's tags, proper nesting, safe links, never cut —
   `Telegram.send` splits long text keeping tags whole),
   `route.ts` (the Supervisor's keyword routing table in code: an obvious calendar/mail request, or a reply to the
-  bot's notice, goes straight to its agent; anything unclear goes to the Supervisor). No Think tool. ✅ / ❌ under an
+  bot's notice, goes straight to its agent; anything unclear goes to the Supervisor). Routing order in `runSupervisor`:
+  1) a reply to the bot's own notice — code; 2) the decision model (`decide.ts`, TypeSafe Jev via OpenRouter's
+  decisions API, `ROUTER_MODEL`, default `typesafe/jev-1.13`, `off` disables; `routeWithDecision`) picks an agent,
+  «several» or «chat», seeing the bot's last message, who wrote it and whether it waits for an answer (memory's
+  `lastBotTurn` / `pendingAgent`), so it never fights the follow-up rule; below 0.5 confidence, a failure or 6 s
+  without an answer → 3) the keyword table / `routeFollowUp` as before. Pictures skip step 2. No Think tool. ✅ / ❌ under an
   invitation (`accept:` / `decline:`) is answered in code with the same RSVP tool, no model call.
   Models per request (`modelFor`): text → `AGENT_MODEL` (gpt-6-luna-pro), pictures → `VISION_MODEL` (gemini-2.5-flash),
   voice → `LLM_MODEL` (gpt-6-luna-pro); a `ModelError` before any write tool ran retries the request on `LLM_MODEL`,

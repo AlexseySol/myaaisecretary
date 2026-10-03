@@ -17,6 +17,8 @@ export interface Config {
   AGENT_MODEL: string;
   /** Requests with pictures (screenshots, photos): a cheap model that sees images. */
   VISION_MODEL: string;
+  /** The decision model that picks the agent for each message (TypeSafe Jev); empty = routing without it. */
+  ROUTER_MODEL: string;
   /** OpenRouter model with audio input that transcribes voice messages. */
   STT_MODEL: string;
   /** Minutes before a meeting to remind, largest first ("30,10" → [30, 10]). */
@@ -82,6 +84,7 @@ export const DEFAULT_LLM_MODEL_SUMMARY = "openai/gpt-6-luna-pro";
 // OpenAI models on OpenRouter take audio only as wav/mp3; Telegram voice notes are OGG/Opus, which Gemini accepts.
 export const DEFAULT_AGENT_MODEL = "openai/gpt-6-luna-pro";
 export const DEFAULT_VISION_MODEL = "google/gemini-2.5-flash";
+export const DEFAULT_ROUTER_MODEL = "typesafe/jev-1.13";
 export const DEFAULT_STT_MODEL = "google/gemini-2.5-flash";
 
 export const REQUIRED_VARS = ["OWNER_TELEGRAM_ID", "TELEGRAM_BOT_TOKEN", "OPENROUTER_API_KEY"] as const;
@@ -121,6 +124,8 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     STT_MODEL: val("STT_MODEL") || DEFAULT_STT_MODEL,
     AGENT_MODEL: val("AGENT_MODEL") || DEFAULT_AGENT_MODEL,
     VISION_MODEL: val("VISION_MODEL") || DEFAULT_VISION_MODEL,
+    // «off» turns it off; unset = the default model.
+    ROUTER_MODEL: val("ROUTER_MODEL") === "off" ? "" : val("ROUTER_MODEL") || DEFAULT_ROUTER_MODEL,
     REMINDER_MINUTES: reminderMinutes(val("REMINDER_MINUTES")),
     TELEGRAM_BOT_TOKEN: botToken,
     OPENROUTER_API_KEY: val("OPENROUTER_API_KEY"),
