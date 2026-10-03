@@ -33,7 +33,7 @@ describe("/settings in Telegram", () => {
     expect(text).toContain("⏰ Нагадування: за 30 і 10 хв до зустрічі");
     expect(text).not.toMatch(/Vercel|REMINDER_MINUTES|LLM_MODEL|Environment/);
     const buttons = (sent.reply_markup as { inline_keyboard: { text: string; callback_data?: string }[][] }).inline_keyboard.flat();
-    expect(buttons.map((b) => b.callback_data).filter(Boolean)).toEqual(["set:tab:google", "set:tab:bitrix", "set:tab:zoom", "set:rem", "set:dg", "set:mail", "set:mem", "tour"]);
+    expect(buttons.map((b) => b.callback_data).filter(Boolean)).toEqual(["set:tab:google", "set:tab:bitrix", "set:tab:zoom", "set:rem", "set:dg", "set:mail", "set:mem", "set:notes", "tour"]);
   });
 
   it("the owner picks reminder times with buttons; they are saved in the pinned message and used by reminders", async () => {

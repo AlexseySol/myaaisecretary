@@ -8,6 +8,7 @@ import { wakeReady } from "../google/pubsub";
 import { hasWorkspaceScope } from "../google/workspace";
 import { refreshCommands } from "./commands";
 import { applyEmailReminders, mailNotices } from "../google/reminders";
+import { notesView } from "./notesMenu";
 import { cronTimeText, DIGEST_BLOCKS, DIGEST_TIMES, type DigestBlock, digestByGoogle, digestStatus, loadDigestChoice, timeText } from "../google/digest";
 import { integrationSource } from "../integrations";
 import { disconnect, INTEGRATION_NAMES, type Integration, startConnect } from "./connect";
@@ -72,6 +73,7 @@ async function mainView(env: Env, user: User): Promise<{ html: string; keyboard:
           `⏰ Нагадування: ${marksText(marks)}${marks.length && !awake ? " — ⚠️ ще не налаштовані" : ""}`,
           `☀️ Ранковий звіт: ${digest ? `щодня о ${timeText((await loadDigestChoice(env)).time)}` : "вимкнено"}`,
           ...(gmail ? [`📧 Нова пошта в бот: ${(await mailNotices(env)) ? "так" : "ні"}`] : []),
+          `📒 Нотатки: ${drive ? "таблиця «Нотатки» на вашому Google Диску" : "потрібен доступ до Диска (перепідключіть Google з усіма галочками)"}`,
         ]
       : ["", "<i>Почніть з Google: без нього календар, пошта й нагадування не працюють.</i>"]),
   ].join("\n");
@@ -92,6 +94,7 @@ async function mainView(env: Env, user: User): Promise<{ html: string; keyboard:
       ...(gmail ? [{ text: `📧 Пошта в бот: ${(await mailNotices(env)) ? "✅" : "❌"}`, callback_data: "set:mail" }] : []),
       { text: "🧠 Памʼять", callback_data: "set:mem" },
     ]);
+    keyboard.push([{ text: "📒 Нотатки", callback_data: "set:notes" }]);
   }
   keyboard.push([{ text: "💡 Що я вмію", callback_data: "tour" }]);
   // Only for an own Pub/Sub topic (GMAIL_PUBSUB_TOPIC); otherwise the bot sets the push up itself.
@@ -288,6 +291,10 @@ export async function handleSettingsButton(env: Env, user: User, data: string, c
     return;
   }
   const settings = await loadOwnerSettings(env);
+  if (data === "set:notes") {
+    await answer();
+    return show(await notesView(env, "all", true));
+  }
   if (data === "set:rem") {
     await answer();
     return show(await remindersView(env));

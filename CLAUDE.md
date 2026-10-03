@@ -74,7 +74,7 @@ webhook and redirects to the bot; `/api/health` shows the state.
   2) «Увійти в Google» — with the video and the one button that step needs), `settings.ts` (/settings: what is connected, reminder times and the
   morning list chosen with `set:…` buttons, no AI), `owner.ts` (profile from Telegram/Google/env),
   `contacts.ts` (names → emails from calendar attendees), `guides.ts` («📖 Інструкції» in /help and /settings: Google
-  APIs and setup, Telegram, Bitrix24; the owner adds a video by replying to a guide with it, kept in `OwnerSettings.gv`). Commands: /start /settings /bitrix /reset /help; everything else
+  APIs and setup, Telegram, Bitrix24; the owner adds a video by replying to a guide with it, kept in `OwnerSettings.gv`). `notesMenu.ts` (/notes and /settings → «📒 Нотатки»: lists without AI, the sheet's link, the report's notes block, buttons `nm:…`; `ensureNotesSheet` makes the sheet right after an update — the news job — daily and on connect, so the owner is told at once). Commands: /start /settings /notes /bitrix /reset /help; everything else
   goes to the agents.
 - `src/google/` — OAuth (grant in a pinned message), Calendar API + push notices (`sync.ts`: n8n invitation
   format with `accept:{id}` / `decline:{id}` buttons; push channel ids are unique per bot and day — Google requires them

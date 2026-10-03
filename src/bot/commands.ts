@@ -8,6 +8,7 @@ import { Telegram } from "../telegram/api";
 export function ownerCommands(env: Env): { command: string; description: string }[] {
   return [
     { command: "start", description: "Почати / підключити Google" },
+    { command: "notes", description: "📒 Нотатки й нагадування" },
     ...(bitrixConfigured(env) ? [{ command: "bitrix", description: "📋 Задачі Bitrix24" }] : []),
     { command: "settings", description: "⚙️ Налаштування й підключення" },
     { command: "reset", description: "Почати розмову заново" },

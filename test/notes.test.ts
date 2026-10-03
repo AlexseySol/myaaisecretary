@@ -7,6 +7,8 @@ import { handleReminderEmail } from "../src/google/reminders";
 import { shadowId, syncSignals } from "../src/google/signals";
 import type { GMessage } from "../src/google/gmail";
 import { handleUpdate } from "../src/telegram/handler";
+import { ensureNotesSheet, handleNotesButton, notesView } from "../src/bot/notesMenu";
+import { loadDigestChoice } from "../src/google/digest";
 import { connectGoogle, GMAIL_SCOPE, type LlmRequest, llmText, llmTools, mockFetch, OWNER, openRouter, resetInstance, runJobs, testEnv, tgCalls } from "./helpers";
 
 beforeEach(() => resetInstance());
@@ -288,5 +290,41 @@ describe("the whole way: a message → the notes agent → the sheet", () => {
     const texts = tgCalls(calls, "sendMessage").map((m) => String(m.text));
     expect(texts.some((t) => t.includes("📒") && t.includes("AI-secretary"))).toBe(true);
     expect(texts.at(-1)).toContain("Нагадаю");
+  });
+});
+
+describe("after an update: the sheet is made at once; /notes shows what is there", () => {
+  it("the folder and the sheet are made right away and the owner is told — once; not without the Drive permission", async () => {
+    const { env, google, calls } = await setUp();
+    await ensureNotesSheet(env);
+    await ensureNotesSheet(env);
+    expect([...google.files.values()].map((f) => f.name).sort()).toEqual(["AI-secretary", "Нотатки"]);
+    expect(tgCalls(calls, "sendMessage").filter((m) => String(m.text).includes("папку «AI-secretary»"))).toHaveLength(1);
+  });
+
+  it("nothing happens without the Drive permission", async () => {
+    await connectGoogle({ scope: GMAIL_SCOPE });
+    const calls = mockFetch([]);
+    const { env } = testEnv();
+    await ensureNotesSheet(env);
+    expect(tgCalls(calls, "sendMessage")).toEqual([]);
+  });
+
+  it("lists: all, upcoming reminders, to-dos, done; the link; the morning report's block on / off", async () => {
+    const { env } = await setUp();
+    await addNote(env, { text: "Ідея розсилки" }, NOW);
+    await addNote(env, { text: "Купити папір", kind: "задача" }, NOW);
+    await addNote(env, { text: "Подзвонити в банк", remindAt: new Date(NOW + 3600_000) }, NOW);
+    const all = await notesView(env, "all", false, NOW);
+    expect(all.html).toContain("Активних: <b>3</b>");
+    expect(all.html).toContain("1. Подзвонити в банк — ⏰ 05.10 10:00");
+    expect(JSON.stringify(all.keyboard)).toContain("docs.google.com/spreadsheets");
+    expect((await notesView(env, "rem", false, NOW)).html).not.toContain("Ідея розсилки");
+    expect((await notesView(env, "todo", false, NOW)).html).toContain("1. Купити папір");
+    expect((await notesView(env, "done", false, NOW)).html).toContain("Зроблених ще немає");
+    expect((await notesView(env, "all", true, NOW)).keyboard.at(-1)).toEqual([{ text: "⬅️ Готово", callback_data: "set:back" }]);
+    const on = (await loadDigestChoice(env)).blocks.includes("notes");
+    await handleNotesButton(env, "nm:dg:all", "cb", OWNER, 1);
+    expect((await loadDigestChoice(env)).blocks.includes("notes")).toBe(!on);
   });
 });

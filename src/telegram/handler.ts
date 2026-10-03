@@ -15,6 +15,7 @@ import { formatTime, toKyivDate } from "../lib/time";
 import type { MailRef } from "../google/gmailPush";
 import type { EventRef } from "../google/sync";
 import { noteButton, type NoteRef } from "../google/notes";
+import { handleNotesButton, showNotes } from "../bot/notesMenu";
 import { appendBatch } from "../session";
 import { Telegram, TG_DOWNLOAD_LIMIT } from "./api";
 import { readHidden } from "./hidden";
@@ -157,6 +158,9 @@ async function handleCommand(env: Env, user: User, text: string): Promise<boolea
       await forgetConversation(env);
       await tg.send(user.tg_id, "🧹 Контекст розмови очищено.");
       return true;
+    case "/notes":
+      await showNotes(env, user.tg_id);
+      return true;
     case "/bitrix":
     case "/tasks":
       await showBitrixMenu(env, user.tg_id);
@@ -187,6 +191,10 @@ async function handleCallback(env: Env, cq: TgCallbackQuery): Promise<void> {
   if (bx) {
     await new Telegram(env).answerCallback(cq.id, bx[1]!.startsWith("report:") ? "Готую звіт…" : undefined).catch(() => undefined);
     await env.jobs.send({ type: "bitrix", chatId, action: bx[1] as BitrixAction });
+    return;
+  }
+  if (cq.data?.startsWith("nm:") && cq.message) {
+    await handleNotesButton(env, cq.data, cq.id, chatId, cq.message.message_id);
     return;
   }
   // ✅ / ⏰ / 📅 under a note reminder: in code, no AI.
