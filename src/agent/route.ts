@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { decide } from "./decide";
+import { decide, decisionImages } from "./decide";
 import type { AgentInput } from "./index";
 
 /**
@@ -100,7 +100,7 @@ export type RouteChoice = Agent | "several" | "chat";
 export const ROUTE_CONFIDENCE = 0.5;
 
 /**
- * The agent for a message, chosen by the decision model (TypeSafe Jev) — with the conversation in view, so it never
+ * The agent for a message, chosen by the decision model (Clef-flash; pictures too) — with the conversation in view, so it never
  * fights the memory: the bot's latest answer, the agent that gave it and whether it waits for an answer go into the
  * state, and an answer to the bot's question goes back to that agent. "several" / "chat" → the Supervisor.
  * Null when the model is off, failed or unsure: the keyword table and the follow-up rule decide as before.
@@ -111,6 +111,8 @@ export async function routeWithDecision(
   conversation: { lastBot?: string; lastAgent?: string; waiting?: boolean },
   bitrix: boolean,
 ): Promise<{ route: RouteChoice; confidence: number } | null> {
+  // A screenshot or photo goes along: Clef reads pictures (an invitation, a letter, a document, a task list…).
+  const images = decisionImages((input.images ?? []).flatMap((p) => (p.type === "image_url" ? [p.image_url.url] : [])));
   const criteria: Record<string, string> = {
     calendar_agent:
       "Google Calendar: create, move, cancel or show meetings and events, free or busy time, answer an invitation, the guests of a meeting, reminders before meetings, a note added to a meeting",
@@ -126,7 +128,14 @@ export async function routeWithDecision(
   };
   const state = {
     message: input.text.slice(0, 2000),
-    message_kind: input.inputType === "forward" ? "forwarded messages" : input.inputType === "voice" ? "voice message (transcribed)" : "typed message",
+    message_kind:
+      input.inputType === "forward"
+        ? "forwarded messages"
+        : input.inputType === "voice"
+          ? "voice message (transcribed)"
+          : images.length
+            ? "picture(s) with a caption — a screenshot or photo: read what is on it"
+            : "typed message",
     ...(input.replyText ? { reply_to_bot_message: input.replyText.slice(0, 500) } : {}),
     ...(conversation.lastBot ? { bot_last_message: conversation.lastBot.slice(0, 600) } : {}),
     ...(conversation.lastAgent ? { bot_last_message_by: conversation.lastAgent } : {}),
@@ -135,7 +144,7 @@ export async function routeWithDecision(
   const instructions =
     "Which assistant must handle the owner's latest message? If bot_waits_for_answer is true and the message is an answer to the bot's question " +
     "(a name, a time, an email, details, «так», «ні», a choice), choose the agent in bot_last_message_by. A new request of another kind goes to its own agent.";
-  const d = await decide(env, state, instructions, criteria);
+  const d = await decide(env, state, instructions, criteria, images);
   if (!d || d.confidence < ROUTE_CONFIDENCE) return null;
   return { route: d.choice as RouteChoice, confidence: d.confidence };
 }

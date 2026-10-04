@@ -183,8 +183,8 @@ export async function runSupervisor(env: Env, input: AgentInput, ctx: RunContext
   // 1. A reply to the bot's own notice names its subject exactly: plain code.
   let direct: AgentName | null = input.replyRef ? (routeByKeywords(input, bitrix) as AgentName | null) : null;
   let decided = !!direct;
-  // 2. The decision model (Jev) picks the agent, with the conversation in view (pictures go to the Supervisor, which sees them).
-  if (!decided && input.inputType !== "callback" && !input.images?.length) {
+  // 2. The decision model (Clef-flash) picks the agent, with the conversation — and any picture — in view.
+  if (!decided && input.inputType !== "callback") {
     const last = lastBotTurn();
     const pick = await routeWithDecision(env, input, { lastBot: last?.text, lastAgent: last?.agent, waiting: !!waiting }, bitrix);
     if (pick) {

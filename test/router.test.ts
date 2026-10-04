@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { decisionImages } from "../src/agent/decide";
 import { routeWithDecision } from "../src/agent/route";
+import { DEFAULT_ROUTER_MODEL } from "../src/env";
 import { handleUpdate } from "../src/telegram/handler";
 import type { TgUpdate } from "../src/telegram/types";
 import { calendarList, connectGoogle, isSupervisor, lastContent, type LlmRequest, llmText, mockFetch, openRouter, OWNER, resetInstance, runJobs, testEnv } from "./helpers";
@@ -7,7 +9,7 @@ import { calendarList, connectGoogle, isSupervisor, lastContent, type LlmRequest
 beforeEach(() => resetInstance());
 afterEach(() => vi.restoreAllMocks());
 
-const ROUTER = { ROUTER_MODEL: "typesafe/jev-1.13" };
+const ROUTER = { ROUTER_MODEL: "cloudflare/clef-flash" };
 const input = (text: string) => ({ chatId: OWNER, inputType: "text" as const, text });
 
 /** A fake decisions endpoint: answers with `choice` (or an error), records every request. */
@@ -26,7 +28,29 @@ const textUpdate = (text: string): TgUpdate => ({
   message: { message_id: updateId + 100, date: Math.floor(Date.now() / 1000), chat: { id: OWNER, type: "private" }, from: { id: OWNER, is_bot: false, first_name: "О" }, text },
 });
 
-describe("routing by the decision model (TypeSafe Jev)", () => {
+describe("routing by the decision model (Clef-flash)", () => {
+  it("is Cloudflare's Clef-flash by default", () => {
+    expect(DEFAULT_ROUTER_MODEL).toBe("cloudflare/clef-flash");
+  });
+
+  it("a screenshot goes along as an embedded picture (PNG/JPEG/WebP within Clef's limits)", async () => {
+    const seen: Record<string, unknown>[] = [];
+    mockFetch([decisions({ choice: "calendar_agent" }, seen)]);
+    const pic = "data:image/jpeg;base64," + "A".repeat(400);
+    const pick = await routeWithDecision(
+      testEnv(ROUTER).env,
+      { chatId: OWNER, inputType: "photo", text: "", images: [{ type: "image_url", image_url: { url: pic } }] },
+      {},
+      false,
+    );
+    expect(pick?.route).toBe("calendar_agent");
+    expect(seen[0]).toMatchObject({ images: [pic] });
+    expect(String((seen[0]!.state as { message_kind: string }).message_kind)).toContain("picture");
+    // Not a picture Clef takes, or too big: left out.
+    expect(decisionImages(["data:image/heic;base64,AAAA", "https://x/y.png", "data:image/png;base64," + "A".repeat(6 * 1024 * 1024)])).toEqual([]);
+    expect(decisionImages(Array(6).fill(pic))).toHaveLength(4);
+  });
+
   it("asks one typed question with the conversation in view; Bitrix24 is an option only when connected", async () => {
     const seen: Record<string, unknown>[] = [];
     mockFetch([decisions({ choice: "calendar_agent" }, seen)]);
@@ -34,7 +58,8 @@ describe("routing by the decision model (TypeSafe Jev)", () => {
     const pick = await routeWithDecision(env, input("о 10"), { lastBot: "О котрій завтра?", lastAgent: "calendar_agent", waiting: true }, false);
     expect(pick).toEqual({ route: "calendar_agent", confidence: 0.9 });
     const body = seen[0] as { model: string; state: Record<string, unknown>; questions: { pick: { type: string; criteria: Record<string, string> } } };
-    expect(body.model).toBe("typesafe/jev-1.13");
+    expect(body.model).toBe("cloudflare/clef-flash");
+    expect(body).not.toHaveProperty("images");
     expect(body.state).toMatchObject({ message: "о 10", bot_last_message: "О котрій завтра?", bot_last_message_by: "calendar_agent", bot_waits_for_answer: true });
     expect(body.questions.pick.type).toBe("choice");
     expect(Object.keys(body.questions.pick.criteria)).toEqual(["calendar_agent", "gmail_agent", "docs_agent", "notes_agent", "several", "chat"]);

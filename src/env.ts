@@ -17,7 +17,7 @@ export interface Config {
   AGENT_MODEL: string;
   /** Requests with pictures (screenshots, photos): a cheap model that sees images. */
   VISION_MODEL: string;
-  /** The decision model that picks the agent for each message (TypeSafe Jev); empty = routing without it. */
+  /** The decision model that picks the agent for each message (Cloudflare Clef-flash; Jev-compatible); empty = routing without it. */
   ROUTER_MODEL: string;
   /** OpenRouter model with audio input that transcribes voice messages. */
   STT_MODEL: string;
@@ -84,7 +84,7 @@ export const DEFAULT_LLM_MODEL_SUMMARY = "openai/gpt-6-luna-pro";
 // OpenAI models on OpenRouter take audio only as wav/mp3; Telegram voice notes are OGG/Opus, which Gemini accepts.
 export const DEFAULT_AGENT_MODEL = "openai/gpt-6-luna-pro";
 export const DEFAULT_VISION_MODEL = "google/gemini-2.5-flash";
-export const DEFAULT_ROUTER_MODEL = "typesafe/jev-1.13";
+export const DEFAULT_ROUTER_MODEL = "cloudflare/clef-flash";
 export const DEFAULT_STT_MODEL = "google/gemini-2.5-flash";
 
 export const REQUIRED_VARS = ["OWNER_TELEGRAM_ID", "TELEGRAM_BOT_TOKEN", "OPENROUTER_API_KEY"] as const;
