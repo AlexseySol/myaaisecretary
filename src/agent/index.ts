@@ -78,6 +78,8 @@ export interface RunContext {
   steps?: Step[];
   /** The live mini-log in the chat. */
   progress?: Progress;
+  /** The owner just said «так» to the bot's preview: actions that change things may run (NEEDS_YES). */
+  approved?: boolean;
 }
 
 /** One tool call done: which agent, which tool, short arguments and result. */
@@ -107,6 +109,75 @@ function limits(ctx: RunContext, agent: string) {
       (ctx.steps ??= []).push({ agent, tool, args: short(args, 400), result: short(result, 600) });
     },
   };
+}
+
+/**
+ * Actions that change something or reach other people (a meeting, an email, a task, a file): done ONLY when the owner
+ * just answered «так» to the bot's preview (a message that starts with 📋). The model cannot skip it — the tool refuses
+ * and tells it to show the preview first. Reading, drafts, notes and memory need no confirmation.
+ */
+const NEEDS_YES = new Set([
+  "create_event_google_meet",
+  "create_event_zoom_link",
+  "create_zoom_meeting",
+  "update_event_fields",
+  "reschedule_event",
+  "manage_event_attendees",
+  "delete_event",
+  "msg_send",
+  "msg_reply",
+  "thread_reply",
+  "msg_trash",
+  "thread_trash",
+  "draft_delete",
+  "label_delete",
+  "add_comment",
+  "create_task",
+  "sheets_append",
+  "sheets_update",
+  "docs_append",
+  "docs_create",
+  "sheets_create",
+  "drive_create_folder",
+  "drive_move",
+  "drive_share",
+]);
+
+/** The preview's first sign; the agents start every preview with it. */
+export const PREVIEW_MARK = "📋";
+
+const YES = /^(так|да|ок|ok|окей|okay|yes|yep|ага|угу|підтверджую|подтверждаю|давай|вірно|верно|правильно|згоден|згодна|согласен|согласна|все вірно|все верно|\+|👍|✅)(?=$|[\s,.!)])/i;
+/** «Ставь», «створюй», «надсилай» mean yes only as the whole answer — «постав зустріч з …» is a new request. */
+const DO_IT = /^(ставь|став|постав|ставити|ставим|створюй|создавай|створи|создай|надсилай|надішли|відправляй|отправляй|відправ|отправь|додай|добавь)$/i;
+
+/** The owner's message is a plain «yes» (not «так, але о 15» — that is a change). */
+export function isYes(text: string): boolean {
+  const t = text.split("\n\n[ПРОДОВЖЕННЯ")[0]!.trim().toLowerCase().replace(/[.!]+$/, "");
+  if (t.length > 40 || /(але|однак|но |только|тільки|only|змін|измен|інш|друг|не так|замість|вместо|\d)/.test(t)) return false;
+  // Only a short answer made of «yes» words: «так, постав зустріч з Олегом» is a new request, not a yes.
+  const words = t.split(/[\s,]+/).filter(Boolean);
+  return words.length <= 3 && words.every((w) => YES.test(w) || DO_IT.test(w) || /^(все|всё|будь|ласка|пожалуйста|please|можна|можно)$/.test(w));
+}
+
+/** Whether this request may change things: the bot's last message was a preview and the owner said «так» to it. */
+export function approved(text: string, lastBot: string | undefined): boolean {
+  return !!lastBot?.includes(PREVIEW_MARK) && isYes(text);
+}
+
+function guarded(tools: Tool[], yes: boolean): Tool[] {
+  if (yes) return tools;
+  return tools.map((t) =>
+    NEEDS_YES.has(t.spec.name)
+      ? {
+          spec: t.spec,
+          run: async () => ({
+            error:
+              `НЕ виконано: спершу покажи власнику превʼю — повідомлення, що починається з «${PREVIEW_MARK}», з усіма даними ` +
+              "(хто, що, коли, кому — з email) — і закінчи питанням «Підтверджуєте? (так / змінити)». Виконаєш, коли власник відповість «так».",
+          }),
+        }
+      : t,
+  );
 }
 
 /** Tools that only read; any other tool call changes the calendar or the mailbox. */
@@ -143,7 +214,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       system: docsPrompt(await loadOwner(env), now) + noDrive + factsBlock() + conversationBlock(),
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
-      tools: [...(drive ? docsTools(env) : []), ...memoryTools],
+      tools: guarded([...(drive ? docsTools(env) : []), ...memoryTools], ctx.approved === true),
       maxIterations: 12,
     });
   }
@@ -173,7 +244,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       system: bitrixPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock(),
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
-      tools: [...bitrixTools(env), ...memoryTools],
+      tools: guarded([...bitrixTools(env), ...memoryTools], ctx.approved === true),
       maxIterations: 12,
     });
     return answer;
@@ -194,7 +265,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
           system: calendarPrompt(owner, await loadDirectory(env), now) + factsBlock() + conversationBlock(),
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
-          tools: [...calendarTools(env, owner.email, { currentText: input.text, freeBusyScope: await hasFreeBusyScope(env) }), ...peopleTools(env), ...memoryTools],
+          tools: guarded([...calendarTools(env, owner.email, { currentText: input.text, freeBusyScope: await hasFreeBusyScope(env) }), ...peopleTools(env), ...memoryTools], ctx.approved === true),
           maxIterations: 10,
         })
       : await runAgent(env, {
@@ -205,7 +276,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
           system: gmailPrompt(await loadDirectory(env).catch(() => [])) + factsBlock() + conversationBlock(),
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
-          tools: [...gmailTools(env), ...peopleTools(env), ...memoryTools],
+          tools: guarded([...gmailTools(env), ...peopleTools(env), ...memoryTools], ctx.approved === true),
           maxIterations: 10,
         });
   return answer;
@@ -357,7 +428,9 @@ export async function runWithFallback(
   opts: { startedAt?: number; model?: string; progress?: Progress } = {},
 ): Promise<AgentResult> {
   const start = opts.startedAt ?? Date.now();
+  const yes = approved(input.text, lastBotTurn()?.text);
   const timed = (model: string): RunContext => ({
+    approved: yes,
     model,
     wrote: false,
     deadline: start + STEP_UNTIL_MS,

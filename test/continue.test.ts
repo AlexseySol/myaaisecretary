@@ -115,3 +115,43 @@ describe("find_person: an email by a name — calendar contacts, Bitrix24, then 
     expect(await findPerson(env, "Юлией Григорьевой")).toEqual([{ name: "Юлия Григорьева", email: "yulia.g@gmail.com", from: "пошта" }]);
   });
 });
+
+describe("nothing changes without the owner's «так» to a 📋 preview", () => {
+  it("a plain yes after a preview approves; anything else does not", async () => {
+    const { approved, isYes } = await import("../src/agent");
+    for (const y of ["так", "Да", "ок", "ставь", "👍", "так, ставь", "давай!", "все вірно", "так, будь ласка"]) expect(isYes(y)).toBe(true);
+    for (const n of ["так, постав зустріч з Олегом", "так, але о 15", "да, только на 16:00", "постав зустріч з Юлією", "ні", "змінити", "так, але не Юлію, а Олену"]) expect(isYes(n)).toBe(false);
+    expect(approved("так", "📋 Перевірте зустріч … Підтверджуєте? (так / змінити)")).toBe(true);
+    expect(approved("так", "Хто буде на зустрічі?")).toBe(false);
+    expect(approved("постав зустріч з Юлією завтра о 14", "📋 Перевірте зустріч")).toBe(false);
+  });
+
+  it("the agent that finds the person and tries to create at once is refused and shows a preview instead", async () => {
+    await connectGoogle();
+    const inserted: unknown[] = [];
+    const toolResults: string[] = [];
+    mockFetch([
+      calendarList([]),
+      (url, init) => {
+        if (url.pathname !== "/calendar/v3/calendars/primary/events" || init.method !== "POST") return undefined;
+        inserted.push(init.bodyText);
+        return Response.json({ id: "ev1", status: "confirmed" });
+      },
+      openRouter((req) => {
+        const last = req.messages.at(-1)!;
+        if (last.role === "tool") {
+          toolResults.push(String(last.content));
+          return llmText("📋 Перевірте зустріч … Підтверджуєте? (так / змінити)");
+        }
+        return llmTools([
+          "create_event_google_meet",
+          { summary: "Зустріч", startDateTime: "2099-10-06T14:00:00+03:00", endDateTime: "2099-10-06T15:00:00+03:00", attendeesJson: '{"email":"y.g@mail.com"}' },
+        ]);
+      }),
+    ]);
+    const { env } = testEnv();
+    await handleWithAgents(env, input("постав зустріч з Юлією Григорьєвою завтра о 14"));
+    expect(inserted).toEqual([]);
+    expect(toolResults[0]).toContain("НЕ виконано");
+  });
+});

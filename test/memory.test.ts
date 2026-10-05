@@ -173,7 +173,8 @@ describe("old requests in the memory are never carried out again", () => {
     await handleUpdate(env, say("йому"));
     await runJobs(env, jobs);
     expect(deletes).toBe(0);
-    expect(toolResults.some((r) => r.includes("does not ask to delete"))).toBe(true);
+    // Refused: no preview was confirmed (and the message does not ask to delete anything).
+    expect(toolResults.some((r) => r.includes("НЕ виконано") || r.includes("does not ask to delete"))).toBe(true);
   });
 
   it("the deletion rule: this message must ask; several or «all» only after «так»", async () => {

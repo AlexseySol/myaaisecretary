@@ -6,6 +6,7 @@ import { handleUpdate } from "../src/telegram/handler";
 import { hiddenData } from "../src/telegram/hidden";
 import type { TgMessage, TgUpdate } from "../src/telegram/types";
 import {
+  previewShown,
   botMessage,
   calendarList,
   connectGoogle,
@@ -258,7 +259,8 @@ describe("agents (the n8n «AI Agent ALL» flow)", () => {
       }),
     ]);
     const { env, jobs } = testEnv();
-    await handleUpdate(env, textUpdate(OWNER, "зустріч з Олегом 1 жовтня о 10 по бюджету"));
+    await previewShown(env);
+    await handleUpdate(env, textUpdate(OWNER, "так"));
     await runJobs(env, jobs);
 
     expect(insertUrl!.searchParams.get("conferenceDataVersion")).toBe("1");
@@ -393,7 +395,8 @@ describe("agents (the n8n «AI Agent ALL» flow)", () => {
       }),
     ]);
     const { env, jobs } = testEnv();
-    await handleUpdate(env, textUpdate(OWNER, "видали стендап"));
+    await previewShown(env);
+    await handleUpdate(env, textUpdate(OWNER, "так"));
     await runJobs(env, jobs);
     expect(order).toEqual(['patch:{"aisStart":"1","aisBotCancel":"1"}:none', "delete"]);
   });
@@ -491,7 +494,8 @@ describe("which model serves a request", () => {
       seen),
     ]);
     const { env, jobs } = testEnv();
-    await handleUpdate(env, textUpdate(OWNER, "видали зустріч"));
+    await previewShown(env);
+    await handleUpdate(env, textUpdate(OWNER, "так"));
     await runJobs(env, jobs);
     expect(deletes).toBe(1);
     expect(seen.map((r) => r.model)).toEqual(["test/agent-model", "test/agent-model"]);

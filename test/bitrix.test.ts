@@ -7,6 +7,7 @@ import { buildTaskReport } from "../src/bitrix/report";
 import { bitrixUrl } from "../src/env";
 import { handleUpdate } from "../src/telegram/handler";
 import type { TgUpdate } from "../src/telegram/types";
+import { previewShown } from "./helpers";
 import { type LlmRequest, llmText, llmTools, mockFetch, OWNER, openRouter, resetInstance, runJobs, testEnv, tgCalls } from "./helpers";
 
 const WEBHOOK = "https://acme.bitrix24.ua/rest/1/secret123/";
@@ -154,7 +155,8 @@ describe("Bitrix24 task agent", () => {
       }, seen),
     ]);
     const { env, jobs } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
-    await handleUpdate(env, { update_id: 1, message: { message_id: 1, date: 0, chat: { id: OWNER, type: "private" }, from: { id: OWNER, is_bot: false, first_name: "О" }, text: "постав Івану Петренку задачу підготувати договір до пʼятниці" } });
+    await previewShown(env, "bitrix_agent", "📋 Нова задача: Підготувати договір, Іван Петренко, до пʼятниці. Створити? (так / змінити)");
+    await handleUpdate(env, { update_id: 1, message: { message_id: 1, date: 0, chat: { id: OWNER, type: "private" }, from: { id: OWNER, is_bot: false, first_name: "О" }, text: "так" } });
     await runJobs(env, jobs);
     expect(seen[0]!.tools!.map((t) => t.function.name)).toContain("create_task");
     expect(String(seen[0]!.messages[0]!.content)).toContain("СУВОРО ЗАБОРОНЕНО");

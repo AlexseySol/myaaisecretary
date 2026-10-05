@@ -294,3 +294,10 @@ export function calendarList(items: unknown[] = []): Route {
       ? Response.json({ items })
       : undefined;
 }
+
+/** The bot just showed a preview (📋 …) of a change: the owner's «так» now lets it happen (agent/index.ts NEEDS_YES). */
+export async function previewShown(env: Env, agent = "calendar_agent", text = "📋 Перевірте: … Підтверджуєте? (так / змінити)"): Promise<void> {
+  const { loadMemory, rememberTurn } = await import("../src/agent/memory");
+  await loadMemory(env);
+  await rememberTurn(env, "запит власника", text, Date.now(), agent);
+}
