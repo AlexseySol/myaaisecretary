@@ -16,7 +16,7 @@ import type { MailRef } from "../google/gmailPush";
 import type { EventRef } from "../google/sync";
 import { noteButton, type NoteRef } from "../google/notes";
 import { handleNotesButton, showNotes } from "../bot/notesMenu";
-import { appendBatch } from "../session";
+import { appendBatch, INBOX_WAIT_S, type InboxItem, pushInbox } from "../session";
 import { Telegram, TG_DOWNLOAD_LIMIT } from "./api";
 import { readHidden } from "./hidden";
 import type { TgCallbackQuery, TgMessage, TgMessageOrigin, TgUpdate, TgUser } from "./types";
@@ -103,6 +103,9 @@ async function handleOwnerMessage(env: Env, user: User, msg: TgMessage): Promise
     return;
   }
 
+  // 👀 — seen (Telegram's reactions): the owner knows every message got in, glued ones too, without extra messages.
+  await tg.call("setMessageReaction", { chat_id: chatId, message_id: msg.message_id, reaction: [{ type: "emoji", emoji: "👀" }] }).catch(() => undefined);
+
   if (msg.voice) {
     if ((msg.voice.file_size ?? 0) > TG_DOWNLOAD_LIMIT) {
       await tg.send(chatId, "Голосове завелике (понад 20 МБ).");
@@ -119,11 +122,14 @@ async function handleOwnerMessage(env: Env, user: User, msg: TgMessage): Promise
     }
     // n8n: a photo goes in as its caption or "[фото]", a document as "[документ: name]"; images are shown to the model.
     const text = msg.caption || (msg.photo ? "[фото]" : `[документ: ${msg.document?.file_name ?? ""}]`);
-    await env.jobs.send({
-      type: "agent",
-      input: { chatId, inputType: msg.photo ? "photo" : "document", text, replyText: replyTextOf(msg), replyRef: refOf(msg.reply_to_message) },
+    await toInbox(env, chatId, {
+      inputType: msg.photo ? "photo" : "document",
+      text,
+      replyText: replyTextOf(msg),
+      replyRef: refOf(msg.reply_to_message),
       photoIds: image ? [image.file_id] : [],
       files: !image && msg.document ? [{ id: msg.document.file_id, name: msg.document.file_name ?? "файл", mime: msg.document.mime_type ?? "" }] : [],
+      messageId: msg.message_id,
     });
     return;
   }
@@ -132,7 +138,14 @@ async function handleOwnerMessage(env: Env, user: User, msg: TgMessage): Promise
   if (!text) return;
   if (await handleGoogleAnswer(env, msg, text)) return;
   if (await handleConnectAnswer(env, msg, text)) return;
-  await env.jobs.send({ type: "agent", input: { chatId, inputType: "text", text, replyText: replyTextOf(msg), replyRef: refOf(msg.reply_to_message) }, photoIds: [] });
+  await toInbox(env, chatId, { inputType: "text", text, replyText: replyTextOf(msg), replyRef: refOf(msg.reply_to_message), photoIds: [], files: [], messageId: msg.message_id });
+}
+
+/** The message waits a moment for the rest of a burst; the latest one's job takes them all (session.ts). */
+async function toInbox(env: Env, chatId: number, item: InboxItem): Promise<void> {
+  await new Telegram(env).typing(chatId);
+  const seq = pushInbox(chatId, item);
+  await env.jobs.send({ type: "inbox", chatId, seq }, { delaySeconds: INBOX_WAIT_S });
 }
 
 /** Service commands; everything else, including an unknown "/…", goes to the agents. Returns true when handled. */
@@ -195,6 +208,19 @@ async function handleCallback(env: Env, cq: TgCallbackQuery): Promise<void> {
   }
   if (cq.data?.startsWith("nm:") && cq.message) {
     await handleNotesButton(env, cq.data, cq.id, chatId, cq.message.message_id);
+    return;
+  }
+  // ✅ Так / ✏️ Змінити under a preview. ✅ is the owner's «так» — the same check as typing it (a stale preview: the
+  // agent shows a fresh one). ✏️ only asks what to change; the owner's next message goes to the agent with the preview.
+  if ((cq.data === "ok:yes" || cq.data === "ok:edit") && cq.message) {
+    const tg = new Telegram(env);
+    await tg.answerCallback(cq.id, cq.data === "ok:yes" ? "✅" : undefined).catch(() => undefined);
+    await tg.call("editMessageReplyMarkup", { chat_id: chatId, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
+    if (cq.data === "ok:edit") {
+      await tg.send(chatId, "✏️ Що змінити? Напишіть — і я покажу нове превʼю.");
+      return;
+    }
+    await toInbox(env, chatId, { inputType: "text", text: "так", photoIds: [], files: [], messageId: cq.message.message_id });
     return;
   }
   // ✅ / ⏰ / 📅 under a note reminder: in code, no AI.

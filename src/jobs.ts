@@ -16,7 +16,7 @@ import { logError } from "./lib/errors";
 import { type ContentPart, pdfPart } from "./llm/openrouter";
 import { parseDocument, textPart } from "./lib/parse";
 import { applyIntegrations } from "./integrations";
-import { takeBatch } from "./session";
+import { drainInbox, isLatest, oneAtATime, takeBatch } from "./session";
 import { transcribe } from "./stt/transcribe";
 import { esc, Telegram } from "./telegram/api";
 
@@ -28,6 +28,8 @@ export type Job = (
   /** One input for the agents (n8n "AI Agent ALL"); photoIds are Telegram files shown to the model; `cont` — the
    * continuation of a request that ran out of an invocation's time (agent/continue.ts). */
   | { type: "agent"; input: AgentInput; photoIds: string[]; files?: TgDocument[]; cont?: Continuation }
+  /** The owner's messages waiting in the chat's inbox; the latest one's job takes them all as one request (session.ts). */
+  | { type: "inbox"; chatId: number; seq: number }
   /** Debounced burst of forwarded messages; processed only if `seq` is still the latest. */
   | { type: "batch"; chatId: number; seq: number }
   /** Transcribe a voice message (n8n "Whisper STT"), then hand it to the agents. */
@@ -59,7 +61,7 @@ export type Job = (
 
 export const JOB_ATTEMPTS = 3;
 /** Agent runs change things (events, mail): never repeated automatically, as in n8n. */
-const ONCE = new Set<Job["type"]>(["agent", "batch", "voice", "bitrix"]);
+const ONCE = new Set<Job["type"]>(["agent", "inbox", "batch", "voice", "bitrix"]);
 
 const PHOTO_MARK = /^\[\[photo:([^\]]+)\]\]$/;
 
@@ -109,22 +111,50 @@ export async function runJob(env: Env, job: Job): Promise<void> {
   // Bitrix24 / Zoom keys given in /settings become env values for this job.
   await applyIntegrations(env);
   switch (job.type) {
+    case "inbox": {
+      // A newer message came: its job takes this one too.
+      if (!isLatest(job.chatId, job.seq)) return;
+      return oneAtATime(job.chatId, async () => {
+        const items = drainInbox(job.chatId);
+        if (!items.length) return;
+        const last = items.at(-1)!;
+        const first = items.find((i) => i.replyText || i.replyRef);
+        const input: AgentInput = {
+          chatId: job.chatId,
+          inputType: items.some((i) => i.inputType === "photo") ? "photo" : items.some((i) => i.inputType === "document") ? "document" : "text",
+          text: items.map((i) => i.text).join("\n"),
+          replyText: first?.replyText ?? null,
+          replyRef: first?.replyRef ?? null,
+          messageId: last.messageId,
+        };
+        await withTyping(env, job.chatId, async () => {
+          const files = await documents(env, items.flatMap((i) => i.files));
+          await handleWithAgents(
+            env,
+            { ...input, text: input.text + files.text, images: [...(await images(env, items.flatMap((i) => i.photoIds))), ...files.parts] },
+            { startedAt: job.at },
+          );
+        });
+      });
+    }
     case "agent":
-      return withTyping(env, job.input.chatId, async () => {
+      return oneAtATime(job.input.chatId, () => withTyping(env, job.input.chatId, async () => {
         const files = await documents(env, job.files ?? []);
         await handleWithAgents(
           env,
           { ...job.input, text: job.input.text + files.text, images: [...(job.input.images ?? []), ...(await images(env, job.photoIds)), ...files.parts] },
           { startedAt: job.at, cont: job.cont },
         );
-      });
+      }));
     case "batch": {
       const batch = takeBatch(job.chatId, job.seq);
       if (!batch) return;
       const photos = batch.lines.map((l) => PHOTO_MARK.exec(l)?.[1]).filter((x): x is string => !!x);
       const text = `Переслана переписка:\n${batch.lines.filter((l) => !PHOTO_MARK.test(l)).join("\n")}`;
-      return withTyping(env, job.chatId, async () =>
-        handleWithAgents(env, { chatId: job.chatId, inputType: "forward", text, images: await images(env, photos) }, { startedAt: job.at }),
+      return oneAtATime(job.chatId, () =>
+        withTyping(env, job.chatId, async () =>
+          handleWithAgents(env, { chatId: job.chatId, inputType: "forward", text, images: await images(env, photos) }, { startedAt: job.at }),
+        ),
       );
     }
     case "voice":
@@ -137,7 +167,9 @@ export async function runJob(env: Env, job: Job): Promise<void> {
           return;
         }
         await tg.send(job.chatId, `🎙 <i>${esc(text)}</i>`, { replyTo: job.messageId });
-        await handleWithAgents(env, { chatId: job.chatId, inputType: "voice", text, replyText: job.replyText, replyRef: job.replyRef }, { startedAt: job.at });
+        await oneAtATime(job.chatId, () =>
+          handleWithAgents(env, { chatId: job.chatId, inputType: "voice", text, replyText: job.replyText, replyRef: job.replyRef, messageId: job.messageId }, { startedAt: job.at }),
+        );
       });
     case "sync":
       if (await hasGoogleAuth(env)) await syncRecent(env);
@@ -208,7 +240,7 @@ async function handleRevoked(env: Env): Promise<void> {
 /** Tells the owner a job finally failed so the request is not lost silently. */
 async function reportJobFailure(env: Env, job: Job): Promise<void> {
   const tg = new Telegram(env);
-  if (job.type === "agent" || job.type === "batch" || job.type === "bitrix") {
+  if (job.type === "agent" || job.type === "inbox" || job.type === "batch" || job.type === "bitrix") {
     await tg.send(env.OWNER_TELEGRAM_ID, "😔 Не вдалося обробити запит. Спробуйте ще раз.").catch(() => undefined);
   } else if (job.type === "voice") {
     await tg.send(job.chatId, "😔 Не вдалося обробити голосове. Спробуйте ще раз.", { replyTo: job.messageId }).catch(() => undefined);

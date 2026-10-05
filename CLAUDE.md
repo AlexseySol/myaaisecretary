@@ -137,6 +137,11 @@ webhook and redirects to the bot; `/api/health` shows the state.
   several / «all» only after «так». In JS regexes `\b` does not work next to Cyrillic letters. Loaded at the start of
   an agent request, written after the answer. Without the Drive scope it stays in the instance.
 - Bursts of forwarded messages (`session.ts`): in memory, self-expiring; losing it may cost a duplicate, never data.
+  The owner's own messages too: each gets 👀 (`setMessageReaction`) and waits `INBOX_WAIT_S` (2.5 s) in the chat's
+  inbox; the latest one's `inbox` job takes the whole burst as ONE request (text, photos, files; an album, a split long
+  text, «…» + «ну точніше…»), and `oneAtATime` keeps a chat's requests from overlapping — what comes meanwhile goes next,
+  glued. The answer is a reply to the last message. A 📋 preview gets «✅ Так / ✏️ Змінити» (`PREVIEW_BUTTONS`, `ok:…`):
+  ✅ goes to the inbox as the owner's «так» (the same `approved` check), ✏️ only asks what to change.
   Do not add a database or any other store.
 
 ## Rules

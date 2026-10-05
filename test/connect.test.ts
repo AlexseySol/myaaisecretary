@@ -65,7 +65,7 @@ describe("connecting Bitrix24 and Zoom from /settings (no deployment variables)"
     expect(lastBotMessage("не прийняв").text).toContain("Bitrix24 не прийняв");
     expect(await loadIntegrations(env)).toEqual({});
     await handleUpdate(env, text("що в мене завтра?"));
-    expect(jobs.map((j) => j.body.type)).toEqual(["agent"]);
+    expect(jobs.map((j) => j.body.type)).toEqual(["inbox"]);
     expect(tgCalls(calls, "deleteMessage")).toHaveLength(1);
   });
 

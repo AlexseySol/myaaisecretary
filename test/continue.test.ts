@@ -218,3 +218,72 @@ describe("a Bitrix24 profile is read whole", () => {
     expect(p.profile).not.toHaveProperty("PERSONAL_MOBILE");
   });
 });
+
+describe("a burst of messages is one request; a chat runs one request at a time", () => {
+  const say = (id: number, text: string) => ({
+    update_id: id,
+    message: { message_id: id, date: Math.floor(Date.now() / 1000), chat: { id: OWNER, type: "private" as const }, from: { id: OWNER, is_bot: false, first_name: "О" }, text },
+  });
+
+  it("«ставь на робочу» + «ну точніше переделай» → 👀 on both, one request with both, the answer replies to the last", async () => {
+    const { handleUpdate } = await import("../src/telegram/handler");
+    const seen: LlmRequest[] = [];
+    const calls = mockFetch([openRouter(() => llmText("Зрозумів."), seen)]);
+    const { env, jobs } = testEnv();
+    await handleUpdate(env, say(11, "ставь на робочу плиз"));
+    await handleUpdate(env, say(12, "ну точніше переделай"));
+    expect(tgCalls(calls, "setMessageReaction").map((r) => r.message_id)).toEqual([11, 12]);
+    expect(jobs.map((j) => [j.body.type, j.delaySeconds])).toEqual([
+      ["inbox", 2.5],
+      ["inbox", 2.5],
+    ]);
+    await runJobs(env, jobs);
+    expect(seen).toHaveLength(1);
+    expect(JSON.stringify(seen[0]!.messages)).toContain("ставь на робочу плиз\\nну точніше переделай");
+    const answer = tgCalls(calls, "sendMessage").at(-1)!;
+    expect(answer.text).toBe("Зрозумів.");
+    expect(answer.reply_parameters).toMatchObject({ message_id: 12 });
+  });
+
+  it("requests of one chat never overlap: the second starts after the first ends", async () => {
+    const { oneAtATime } = await import("../src/session");
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const a = oneAtATime(OWNER, async () => {
+      order.push("a start");
+      await gate;
+      order.push("a end");
+    });
+    const b = oneAtATime(OWNER, async () => {
+      order.push("b");
+    });
+    await Promise.resolve();
+    release();
+    await Promise.all([a, b]);
+    expect(order).toEqual(["a start", "a end", "b"]);
+  });
+
+  it("a preview gets ✅ Так / ✏️ Змінити; ✅ is the owner's «так», ✏️ asks what to change", async () => {
+    const { handleUpdate } = await import("../src/telegram/handler");
+    const { isPreview } = await import("../src/agent");
+    expect(isPreview("<b>📋 Перевірте зустріч</b>")).toBe(true);
+    expect(isPreview("✅ Готово")).toBe(false);
+    await connectGoogle();
+    const calls = mockFetch([openRouter(() => llmText("📋 <b>Перевірте зустріч</b>\n… Підтверджуєте? (так / змінити)"))]);
+    const { env, jobs } = testEnv();
+    await handleWithAgents(env, input("постав зустріч"));
+    const preview = tgCalls(calls, "sendMessage").at(-1)!;
+    expect(JSON.stringify(preview.reply_markup)).toContain("ok:yes");
+    const press = (data: string) => ({
+      update_id: 99,
+      callback_query: { id: "cb", from: { id: OWNER, is_bot: false, first_name: "О" }, data, message: { message_id: 50, date: 0, chat: { id: OWNER, type: "private" as const }, text: "📋 Перевірте зустріч" } },
+    });
+    await handleUpdate(env, press("ok:edit"));
+    expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("Що змінити");
+    await handleUpdate(env, press("ok:yes"));
+    expect(jobs.at(-1)!.body.type).toBe("inbox");
+    const { drainInbox } = await import("../src/session");
+    expect(drainInbox(OWNER).map((i) => i.text)).toEqual(["так"]);
+  });
+});

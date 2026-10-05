@@ -29,6 +29,8 @@ import { type Continuation, continuationText, CUT_MS, handOff, MAX_HOPS, RETRY_U
  */
 export interface AgentInput {
   chatId: number;
+  /** The owner's (last) message: the answer is a reply to it. */
+  messageId?: number;
   inputType: "text" | "voice" | "photo" | "document" | "callback" | "forward";
   text: string;
   /** Text of the bot message the owner replied to, or of the message with the pressed button. */
@@ -146,6 +148,19 @@ const NEEDS_YES = new Set([
 
 /** The preview's first sign; the agents start every preview with it. */
 export const PREVIEW_MARK = "📋";
+
+/** Under a preview: ✅ is the owner's «так» (goes to the agents as that), ✏️ asks what to change. No other buttons. */
+export const PREVIEW_BUTTONS: InlineKeyboard = [
+  [
+    { text: "✅ Так", callback_data: "ok:yes" },
+    { text: "✏️ Змінити", callback_data: "ok:edit" },
+  ],
+];
+
+/** An answer that is a preview waiting for «так». */
+export function isPreview(html: string): boolean {
+  return html.replace(/<[^>]+>/g, "").trimStart().startsWith(PREVIEW_MARK);
+}
 
 const YES = /^(так|да|ок|ok|окей|okay|yes|yep|ага|угу|підтверджую|подтверждаю|давай|вірно|верно|правильно|згоден|згодна|согласен|согласна|все вірно|все верно|\+|👍|✅)(?=$|[\s,.!)])/i;
 /** «Ставь», «створюй», «надсилай» mean yes only as the whole answer — «постав зустріч з …» is a new request. */
@@ -510,11 +525,13 @@ export async function handleWithAgents(env: Env, input: AgentInput, opts: { star
     await rememberTurn(env, `${input.text}${about}`, output, Date.now(), result.agent);
   }
   const html = toTelegramHtml(output);
-  await tg.send(input.chatId, html).catch(async (err) => {
+  // A preview waits for the owner: ✅ Так / ✏️ Змінити under it (✅ is the same as typing «так»).
+  const sendOpts = { ...(input.messageId ? { replyTo: input.messageId } : {}), ...(isPreview(html) ? { keyboard: PREVIEW_BUTTONS } : {}) };
+  await tg.send(input.chatId, html, sendOpts).catch(async (err) => {
     // Telegram rejected the markup (e.g. a broken link): the same answer as plain text.
     if (!(err instanceof HttpError && err.status === 400)) throw err;
     const plain = html.replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
-    await tg.send(input.chatId, esc(plain));
+    await tg.send(input.chatId, esc(plain), sendOpts);
   });
   // The answer is here: the mini-log goes.
   await progress?.finish();

@@ -88,9 +88,74 @@ export function clearAnswer(chatId: number): void {
   pending.delete(chatId);
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// The owner's messages, glued and one at a time (Telegram bots' usual practice)
+//
+// People write in bursts: «ставь на робочу» + «ну точніше переделай» a second apart, a long text Telegram split, an
+// album. Each message waits a moment (INBOX_WAIT_S) in the chat's inbox; the latest one's job takes them all as ONE
+// request. And a chat runs one request at a time: what arrives meanwhile waits and goes next, glued together.
+
+/** How long the bot waits for the next message of a burst. */
+export const INBOX_WAIT_S = 2.5;
+
+export interface InboxItem {
+  text: string;
+  inputType: "text" | "photo" | "document";
+  replyText?: string | null;
+  replyRef?: string | null;
+  photoIds: string[];
+  files: { id: string; name: string; mime: string }[];
+  messageId: number;
+}
+
+const inboxes = new Map<number, { items: InboxItem[]; seq: number }>();
+
+/** Adds a message to the chat's inbox; returns its number (the job of the latest one takes them all). */
+export function pushInbox(chatId: number, item: InboxItem): number {
+  const box = inboxes.get(chatId) ?? { items: [], seq: 0 };
+  box.items.push(item);
+  box.seq++;
+  inboxes.set(chatId, box);
+  return box.seq;
+}
+
+/** Whether no newer message arrived after `seq`. */
+export function isLatest(chatId: number, seq: number): boolean {
+  return inboxes.get(chatId)?.seq === seq;
+}
+
+/** Everything waiting in the chat's inbox, oldest first (the inbox is left empty). */
+export function drainInbox(chatId: number): InboxItem[] {
+  const box = inboxes.get(chatId);
+  if (!box) return [];
+  const items = box.items;
+  box.items = [];
+  return items;
+}
+
+const running = new Map<number, Promise<void>>();
+
+/** Runs `fn` after the chat's request in progress (if any) has finished: a chat's requests never overlap. */
+export async function oneAtATime<T>(chatId: number, fn: () => Promise<T>): Promise<T> {
+  const before = running.get(chatId) ?? Promise.resolve();
+  let release!: () => void;
+  const mine = new Promise<void>((r) => (release = r));
+  const chain = before.then(() => mine);
+  running.set(chatId, chain);
+  await before;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (running.get(chatId) === chain) running.delete(chatId);
+  }
+}
+
 /** Tests: start from a clean instance. */
 export function resetSession(): void {
   marks.clear();
   batches.clear();
   pending.clear();
+  inboxes.clear();
+  running.clear();
 }

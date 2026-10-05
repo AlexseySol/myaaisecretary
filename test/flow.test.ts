@@ -193,7 +193,7 @@ describe("agents (the n8n «AI Agent ALL» flow)", () => {
     ]);
     const { env, jobs } = testEnv();
     await handleUpdate(env, textUpdate(OWNER, "що в мене сьогодні?"));
-    expect(jobs.map((j) => j.body.type)).toEqual(["agent"]);
+    expect(jobs.map((j) => j.body.type)).toEqual(["inbox"]);
     await runJobs(env, jobs);
 
     expect(seen.map((r) => r.model)).toEqual(["test/agent-model", "test/agent-model"]);
@@ -442,7 +442,9 @@ describe("which model serves a request", () => {
     const seen: LlmRequest[] = [];
     mockFetch([openRouter(() => llmText("ok"), seen)]);
     const { env, jobs } = testEnv();
+    // Two separate requests (a burst within a few seconds would be glued into one).
     await handleUpdate(env, textUpdate(OWNER, "привіт"));
+    await runJobs(env, jobs);
     await handleUpdate(env, textUpdate(OWNER, "", { text: undefined, caption: "що тут?", photo: [{ file_id: "p", file_unique_id: "u", width: 1, height: 1 }] }));
     await runJobs(env, jobs);
     expect(seen.map((r) => r.model)).toEqual(["test/agent-model", "test/vision-model"]);
