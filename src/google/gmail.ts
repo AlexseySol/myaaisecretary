@@ -195,6 +195,12 @@ export class Gmail {
     return (res.messages ?? []).map((m) => m.id);
   }
 
+  /** The From / To / Cc lines of a message (only its headers are fetched). */
+  async addressLines(id: string): Promise<string[]> {
+    const m = await this.request<GMessage>(`/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc`);
+    return ["From", "To", "Cc"].map((h) => header(m.payload, h)).filter(Boolean);
+  }
+
   async get(id: string): Promise<MailMessage> {
     return toMailMessage(await this.request<GMessage>(`/messages/${encodeURIComponent(id)}?format=full`));
   }
@@ -257,4 +263,15 @@ export class Gmail {
   async stop(): Promise<void> {
     await this.request("/stop", { method: "POST" });
   }
+}
+
+/** «Юлія Григорьєва <y.g@x.com>, "Doe, John" <j@d.com>, plain@x.com» → names and emails. */
+export function parseAddresses(line: string): { name: string; email: string }[] {
+  const out: { name: string; email: string }[] = [];
+  for (const m of line.matchAll(/(?:"([^"]*)"|([^,<"]*?))\s*<([^>\s]+@[^>\s]+)>|([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g)) {
+    const email = (m[3] ?? m[4] ?? "").toLowerCase();
+    if (!email) continue;
+    out.push({ name: (m[1] ?? m[2] ?? "").trim(), email });
+  }
+  return out;
 }

@@ -12,6 +12,7 @@ import { toTelegramHtml } from "./html";
 import { conversationBlock, conversationHistory, factsBlock, lastBotTurn, loadMemory, memoryTools, pendingAgent, rememberTurn, saveMemory } from "./memory";
 import { bitrixPrompt, calendarPrompt, docsPrompt, gmailPrompt, notesPrompt, supervisorPrompt } from "./prompts";
 import { notesTools } from "./notesTools";
+import { peopleTools } from "./peopleTools";
 import { docsTools } from "./docsTools";
 import { hasWorkspaceScope } from "../google/workspace";
 import { bitrixTools } from "./bitrixTools";
@@ -193,7 +194,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
           system: calendarPrompt(owner, await loadDirectory(env), now) + factsBlock() + conversationBlock(),
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
-          tools: [...calendarTools(env, owner.email, { currentText: input.text, freeBusyScope: await hasFreeBusyScope(env) }), ...memoryTools],
+          tools: [...calendarTools(env, owner.email, { currentText: input.text, freeBusyScope: await hasFreeBusyScope(env) }), ...peopleTools(env), ...memoryTools],
           maxIterations: 10,
         })
       : await runAgent(env, {
@@ -204,7 +205,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
           system: gmailPrompt(await loadDirectory(env).catch(() => [])) + factsBlock() + conversationBlock(),
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
-          tools: [...gmailTools(env), ...memoryTools],
+          tools: [...gmailTools(env), ...peopleTools(env), ...memoryTools],
           maxIterations: 10,
         });
   return answer;

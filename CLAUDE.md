@@ -41,7 +41,8 @@ webhook and redirects to the bot; `/api/health` shows the state.
   Drive, Sheets, Docs via `google/workspace.ts`, scope `drive` — read, create, append, move, share; NOTHING is ever
   deleted, trashed or cleared, keep it that way; a file sent in the chat is read even without the scope; long texts come
   in 20 000-character parts (`lib/parse.ts` `textPart`, the tools' `part`), searches and folders 25 files a page
-  (`nextPage`); with many matches the agent asks the owner to narrow instead of paging through everything), `files.ts`
+  (`nextPage`); with many matches the agent asks the owner to narrow instead of paging through everything), `peopleTools.ts` (`find_person` for the calendar and mail agents: an email by a name in any case form — calendar contacts,
+  Bitrix24 users when connected, then the From/To/Cc of the owner's recent mail (headers only, cached 10 min)), `files.ts`
   (a file as text for a tool: `lib/parse.ts` reads .docx/.xlsx/.pptx/.csv/text without dependencies via `lib/unzip.ts`;
   a PDF goes to the model as a `file` part with OpenRouter's free pdf-text parser), `notesTools.ts` (the Notes Agent,
   `notesPrompt`: the owner's notes, to-dos and personal reminders — `note_add` / `note_search` / `note_update` /

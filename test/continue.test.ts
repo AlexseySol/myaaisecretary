@@ -91,3 +91,27 @@ describe("a request longer than one invocation goes on in the next (Vercel's 60 
     expect(stepLabel("whatever")).toBe("⚙️ Працюю");
   });
 });
+
+describe("find_person: an email by a name — calendar contacts, Bitrix24, then the owner's mail", () => {
+  it("a person outside the company is found in the owner's recent mail, whatever the case form", async () => {
+    const { findPerson } = await import("../src/agent/peopleTools");
+    const { parseAddresses } = await import("../src/google/gmail");
+    expect(parseAddresses('"Григорьева, Юлия" <y.g@mail.com>, Олег <oleg@x.ua>, plain@y.com')).toEqual([
+      { name: "Григорьева, Юлия", email: "y.g@mail.com" },
+      { name: "Олег", email: "oleg@x.ua" },
+      { name: "", email: "plain@y.com" },
+    ]);
+    const { GMAIL_SCOPE } = await import("./helpers");
+    await connectGoogle({ scope: GMAIL_SCOPE });
+    mockFetch([
+      calendarList([]),
+      (url) => {
+        if (url.hostname !== "gmail.googleapis.com") return undefined;
+        if (url.pathname.endsWith("/messages")) return Response.json({ messages: [{ id: "m1" }] });
+        return Response.json({ id: "m1", payload: { headers: [{ name: "From", value: "Юлия Григорьева <yulia.g@gmail.com>" }, { name: "To", value: "o.kovalenko@acme.ua" }] } });
+      },
+    ]);
+    const { env } = testEnv();
+    expect(await findPerson(env, "Юлией Григорьевой")).toEqual([{ name: "Юлия Григорьева", email: "yulia.g@gmail.com", from: "пошта" }]);
+  });
+});

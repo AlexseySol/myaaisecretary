@@ -1,3 +1,4 @@
+import { resetPeopleCache } from "../src/agent/peopleTools";
 import { vi } from "vitest";
 import { resetMemory } from "../src/agent/memory";
 import { createEnv } from "../src/app";
@@ -48,6 +49,7 @@ export const testConfig: Config = {
 
 /** Every test starts from a fresh instance: nothing survives between tests, as between cold starts. */
 export function resetInstance(): void {
+  resetPeopleCache();
   resetGoogleCache();
   resetSession();
   resetDirectory();
