@@ -130,6 +130,15 @@ export class Bitrix {
   }
 
   async call<T>(method: string, params: Record<string, unknown> = {}): Promise<{ result: T; next?: number; total?: number }> {
+    // A hard lock whatever rights the webhook has: only these methods ever leave the bot.
+    if (!BITRIX_ALLOWED.has(method)) throw new Error(`Bitrix24: method «${method}» is not allowed for the bot`);
+    if (method === "batch") {
+      const cmd = (params.cmd ?? {}) as Record<string, string>;
+      for (const c of Object.values(cmd)) {
+        const inner = String(c).split("?")[0]!;
+        if (!BITRIX_READ.has(inner)) throw new Error(`Bitrix24: method «${inner}» is not allowed in a batch`);
+      }
+    }
     const res = await fetchWithRetry(`${this.env.BITRIX_WEBHOOK_URL}${method}.json`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -424,6 +433,26 @@ export function toPerson(u: Record<string, unknown>): Person {
     ...(Object.keys(profile).length ? { profile } : {}),
   };
 }
+
+/**
+ * Every Bitrix24 method the bot may call — whatever rights the webhook was given (even full access), the bot reads
+ * tasks, people and task chats, writes a comment and creates a task; it can never close, change, delegate or delete a
+ * task, write to any other chat, or touch CRM, files, users or settings. Writes run only after the owner's «так» to a
+ * preview (agent/index.ts NEEDS_YES).
+ */
+export const BITRIX_READ = new Set([
+  "user.current",
+  "user.get",
+  "tasks.task.list",
+  "tasks.task.get",
+  "task.stages.get",
+  "task.commentitem.getlist",
+  "im.chat.get",
+  "im.dialog.messages.get",
+  "sonet_group.get",
+]);
+const BITRIX_WRITE = new Set(["task.commentitem.add", "im.message.add", "tasks.task.add"]);
+export const BITRIX_ALLOWED = new Set([...BITRIX_READ, ...BITRIX_WRITE, "batch"]);
 
 function toComment(c: Record<string, string>): BxComment {
   return { id: String(c.ID), authorId: String(c.AUTHOR_ID), authorName: c.AUTHOR_NAME ?? "", date: c.POST_DATE ?? "", text: plainText(c.POST_MESSAGE) };

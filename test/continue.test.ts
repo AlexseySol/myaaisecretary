@@ -287,3 +287,27 @@ describe("a burst of messages is one request; a chat runs one request at a time"
     expect(drainInbox(OWNER).map((i) => i.text)).toEqual(["так"]);
   });
 });
+
+describe("Bitrix24: only the bot's own methods, whatever rights the webhook has", () => {
+  it("closing, changing or deleting a task, CRM, other chats — refused before anything is sent", async () => {
+    const { Bitrix, BITRIX_ALLOWED } = await import("../src/bitrix/client");
+    const sent: string[] = [];
+    mockFetch([
+      (url) => {
+        if (url.hostname !== "acme.bitrix24.ua") return undefined;
+        sent.push(url.pathname);
+        return Response.json({ result: [] });
+      },
+    ]);
+    const { env } = testEnv({ BITRIX_WEBHOOK_URL: "https://acme.bitrix24.ua/rest/1/key/" });
+    const bx = new Bitrix(env);
+    for (const m of ["tasks.task.delete", "tasks.task.complete", "tasks.task.update", "tasks.task.delegate", "crm.deal.list", "user.update", "disk.file.delete"]) {
+      expect(BITRIX_ALLOWED.has(m)).toBe(false);
+      await expect(bx.call(m)).rejects.toThrow("not allowed");
+    }
+    await expect(bx.call("batch", { cmd: { a: "tasks.task.list?x=1", b: "tasks.task.delete?taskId=5" } })).rejects.toThrow("not allowed");
+    expect(sent).toEqual([]);
+    await bx.call("tasks.task.list");
+    expect(sent).toEqual(["/rest/1/key/tasks.task.list.json"]);
+  });
+});
