@@ -268,29 +268,44 @@ describe("notes in the morning report and in routing", () => {
 });
 
 describe("the whole way: a message → the notes agent → the sheet", () => {
-  it("«нагадай мені…» goes to the notes agent, which writes it at once and sets the reminder", async () => {
-    await connectGoogle({ scope: FULL });
+  it("«нагадай мені…» goes to the notes agent: a 📋 preview first, written and the reminder set only after «так»", async () => {
+    // Without the hidden memory folder: the conversation stays in the instance (this fake Drive keeps no memory file).
+    await connectGoogle({ scope: FULL.replace(" https://www.googleapis.com/auth/drive.appdata", "") });
     const google = fakeGoogle();
     const seen: LlmRequest[] = [];
+    const add = () => llmTools(["note_add", { text: "Подзвонити в банк", remindAt: "2099-10-06T09:00:00+03:00" }]);
     const calls = mockFetch([
       google.route,
-      openRouter((_req, n) => (n === 1 ? llmTools(["note_add", { text: "Подзвонити в банк", remindAt: "2099-10-06T09:00:00+03:00" }]) : llmText("⏰ Нагадаю 6 жовтня о 09:00: подзвонити в банк")), seen),
+      openRouter((req) => {
+        const last = req.messages.at(-1)!;
+        if (last.role !== "tool") return add();
+        // Refused without «так» → the preview; done after «так» → the short answer.
+        return String(last.content).includes("НЕ виконано")
+          ? llmText("📋 <b>Записати в нотатки?</b>\n📝 Подзвонити в банк\n⏰ 06.10 09:00\nПідтверджуєте? (так / змінити)")
+          : llmText("⏰ Нагадаю 6 жовтня о 09:00: подзвонити в банк");
+      }, seen),
     ]);
     const { env, jobs } = testEnv();
     await saveOwnerSettings(env, { ...(await loadOwnerSettings(env)), p: "ok" });
-    await handleUpdate(env, {
-      update_id: 1,
-      message: { message_id: 5, date: Math.floor(Date.now() / 1000), chat: { id: OWNER, type: "private" }, from: { id: OWNER, is_bot: false, first_name: "О" }, text: "нагадай мені 6 жовтня о 9 подзвонити в банк" },
-    });
+    const say = (id: number, text: string) =>
+      handleUpdate(env, { update_id: id, message: { message_id: id, date: Math.floor(Date.now() / 1000), chat: { id: OWNER, type: "private" }, from: { id: OWNER, is_bot: false, first_name: "О" }, text } });
+    await say(5, "нагадай мені 6 жовтня о 9 подзвонити в банк");
     await runJobs(env, jobs);
     expect(seen[0]!.tools!.map((t) => t.function.name)).toContain("note_add");
+    // Nothing written yet: only the preview, with ✅ / ✏️.
+    expect([...google.rows.values()].every((rows) => rows.length <= 1)).toBe(true);
+    expect(google.events.size).toBe(0);
+    const preview = tgCalls(calls, "sendMessage").at(-1)!;
+    expect(String(preview.text)).toContain("📋");
+    expect(JSON.stringify(preview.reply_markup)).toContain("ok:yes");
+    await say(6, "так");
+    await runJobs(env, jobs);
     const sheet = [...google.rows.values()][0]!;
     expect(sheet[1]).toMatchObject({ 3: "Подзвонити в банк", 4: "2099-10-06 09:00" });
     expect(google.events.size).toBe(1);
-    const texts = tgCalls(calls, "sendMessage").map((m) => String(m.text));
-    expect(texts.some((t) => t.includes("📒") && t.includes("AI-secretary"))).toBe(true);
-    expect(texts.at(-1)).toContain("Нагадаю");
+    expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("Нагадаю");
   });
+
 });
 
 describe("after an update: the sheet is made at once; /notes shows what is there", () => {

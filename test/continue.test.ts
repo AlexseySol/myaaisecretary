@@ -124,6 +124,9 @@ describe("nothing changes without the owner's «так» to a 📋 preview", () 
     expect(approved("так", "📋 Перевірте зустріч … Підтверджуєте? (так / змінити)")).toBe(true);
     expect(approved("так", "Хто буде на зустрічі?")).toBe(false);
     expect(approved("постав зустріч з Юлією завтра о 14", "📋 Перевірте зустріч")).toBe(false);
+    // ✅ under a preview / a reply to it: the preview's own text comes along, whatever the memory holds.
+    expect(approved("так", undefined, "📋 Перевірте зустріч")).toBe(true);
+    expect(approved("так", undefined, "Що в мене завтра?")).toBe(false);
   });
 
   it("the agent that finds the person and tries to create at once is refused and shows a preview instead", async () => {

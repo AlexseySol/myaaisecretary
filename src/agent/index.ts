@@ -117,9 +117,11 @@ function limits(ctx: RunContext, agent: string) {
 /**
  * Actions that change something or reach other people (a meeting, an email, a task, a file): done ONLY when the owner
  * just answered «так» to the bot's preview (a message that starts with 📋). The model cannot skip it — the tool refuses
- * and tells it to show the preview first. Reading, drafts, notes and memory need no confirmation.
+ * and tells it to show the preview first. Only reading needs none — and the bot's own chat memory (remember_fact), which
+ * changes nothing of the owner's; a button the owner presses (✅ / ❌ under an invitation, under a reminder) is itself
+ * the confirmation.
  */
-const NEEDS_YES = new Set([
+export const NEEDS_YES = new Set([
   "create_event_google_meet",
   "create_event_zoom_link",
   "create_zoom_meeting",
@@ -144,6 +146,19 @@ const NEEDS_YES = new Set([
   "drive_create_folder",
   "drive_move",
   "drive_share",
+  // Everything else that changes the owner's things: an answer to an invitation typed in words (the ✅ / ❌ buttons are
+  // the owner's own press), drafts, labels, read marks, a restored email, notes.
+  "rsvp_event",
+  "draft_create",
+  "label_create",
+  "msg_add_label",
+  "msg_remove_label",
+  "msg_mark_read",
+  "msg_mark_unread",
+  "thread_untrash",
+  "note_add",
+  "note_update",
+  "note_archive",
 ]);
 
 /** The preview's first sign; the agents start every preview with it. */
@@ -175,9 +190,12 @@ export function isYes(text: string): boolean {
   return words.length <= 3 && words.every((w) => YES.test(w) || DO_IT.test(w) || /^(все|всё|будь|ласка|пожалуйста|please|можна|можно)$/.test(w));
 }
 
-/** Whether this request may change things: the bot's last message was a preview and the owner said «так» to it. */
-export function approved(text: string, lastBot: string | undefined): boolean {
-  return !!lastBot?.includes(PREVIEW_MARK) && isYes(text);
+/**
+ * Whether this request may change things: the owner said «так» to a preview — the bot's last message in the chat memory,
+ * or the preview the owner replied to / pressed ✅ under (Telegram brings its text along, whatever the memory holds).
+ */
+export function approved(text: string, lastBot: string | undefined, repliedTo?: string | null): boolean {
+  return (!!lastBot?.includes(PREVIEW_MARK) || !!repliedTo?.includes(PREVIEW_MARK)) && isYes(text);
 }
 
 function guarded(tools: Tool[], yes: boolean): Tool[] {
@@ -246,7 +264,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       system: notesPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock(),
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
-      tools: [...notesTools(env), ...memoryTools],
+      tools: guarded([...notesTools(env), ...memoryTools], ctx.approved === true),
       maxIterations: 10,
     });
   }
@@ -444,7 +462,7 @@ export async function runWithFallback(
   opts: { startedAt?: number; model?: string; progress?: Progress } = {},
 ): Promise<AgentResult> {
   const start = opts.startedAt ?? Date.now();
-  const yes = approved(input.text, lastBotTurn()?.text);
+  const yes = approved(input.text, lastBotTurn()?.text, input.replyText);
   const timed = (model: string): RunContext => ({
     approved: yes,
     model,

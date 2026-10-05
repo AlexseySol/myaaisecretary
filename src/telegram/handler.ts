@@ -220,7 +220,8 @@ async function handleCallback(env: Env, cq: TgCallbackQuery): Promise<void> {
       await tg.send(chatId, "✏️ Що змінити? Напишіть — і я покажу нове превʼю.");
       return;
     }
-    await toInbox(env, chatId, { inputType: "text", text: "так", photoIds: [], files: [], messageId: cq.message.message_id });
+    // The preview itself comes along: the «так» is tied to it even when the chat memory is elsewhere.
+    await toInbox(env, chatId, { inputType: "text", text: "так", replyText: cq.message.text ?? null, photoIds: [], files: [], messageId: cq.message.message_id });
     return;
   }
   // ✅ / ⏰ / 📅 under a note reminder: in code, no AI.
