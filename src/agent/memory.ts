@@ -1,3 +1,4 @@
+import { cutText, wellFormed } from "../lib/text";
 import type { Env } from "../env";
 import { readAppFile, writeAppFile } from "../google/drive";
 import { hasDriveScope, loadOwnerSettings } from "../google/oauth";
@@ -96,7 +97,7 @@ const plain = (html: string) =>
 
 /** Adds one pair (the owner's message and the bot's answer, and the agent that gave it) to the session. */
 export async function rememberTurn(env: Env, user: string, bot: string, now = Date.now(), agent?: string): Promise<void> {
-  const cut = (s: string) => (s.length > MAX_TEXT ? `${s.slice(0, MAX_TEXT)}…` : s);
+  const cut = (s: string) => wellFormed(cutText(s, MAX_TEXT));
   const answer: Entry = { t: now, who: "b", text: cut(plain(bot)), ...(agent ? { a: agent } : {}) };
   state.log = [...state.log, { t: now, who: "u" as const, text: cut(user.trim()) }, answer].slice(-2 * (await limit(env)));
   dirty = true;

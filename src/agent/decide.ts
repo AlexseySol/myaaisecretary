@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { fetchWithRetry } from "../lib/http";
+import { safeJson } from "../lib/text";
 
 /**
  * Typed decisions by a small «System One» model through OpenRouter's decisions API — Cloudflare's Clef-flash by default
@@ -65,7 +66,7 @@ export async function decide<K extends string>(
           "HTTP-Referer": env.PUBLIC_URL,
           "X-Title": "AI-secretary",
         },
-        body: JSON.stringify({
+        body: safeJson({
           model: env.ROUTER_MODEL,
           state,
           questions: { pick: { type: "choice", instructions, criteria } },

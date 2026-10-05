@@ -1,3 +1,4 @@
+import { safeJson } from "../lib/text";
 import type { Env } from "../env";
 import { expectOk, fetchWithRetry } from "../lib/http";
 
@@ -41,7 +42,7 @@ async function complete(env: Env, body: Record<string, unknown>): Promise<string
       "HTTP-Referer": env.PUBLIC_URL,
       "X-Title": "AI-secretary",
     },
-    body: JSON.stringify(body),
+    body: safeJson(body),
   });
   await expectOk("openrouter", res);
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; error?: { message: string } };
@@ -117,7 +118,7 @@ export async function chatWithTools(
       "HTTP-Referer": env.PUBLIC_URL,
       "X-Title": "AI-secretary",
     },
-    body: JSON.stringify({
+    body: safeJson({
       model,
       messages,
       ...(tools.length ? { tools: tools.map((t) => ({ type: "function", function: t })) } : {}),

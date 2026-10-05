@@ -155,3 +155,33 @@ describe("nothing changes without the owner's «так» to a 📋 preview", () 
     expect(toolResults[0]).toContain("НЕ виконано");
   });
 });
+
+describe("a request body is always valid JSON for the model provider", () => {
+  it("text is never cut in half an emoji, and a half kept anywhere is cleaned before sending", async () => {
+    const { cutText, safeJson, wellFormed } = await import("../src/lib/text");
+    expect(cutText("📋 Перевірте", 1)).toBe("…");
+    expect(cutText("ab📋", 3)).toBe("ab…");
+    expect(cutText("коротко", 50)).toBe("коротко");
+    const half = "📋".slice(0, 1);
+    expect(wellFormed(`x${half}y`)).toBe("x�y");
+    expect(safeJson({ a: [`${half}`] })).not.toContain("\\ud83d");
+    // A chat memory that already holds half an emoji (from before) does not break the next request.
+    await connectGoogle();
+    const bodies: string[] = [];
+    mockFetch([
+      calendarList([]),
+      (url, init) => {
+        if (url.hostname === "openrouter.ai" && url.pathname.endsWith("/chat/completions")) bodies.push(init.bodyText);
+        return undefined;
+      },
+      openRouter(() => llmText("Привіт!")),
+    ]);
+    const { env } = testEnv();
+    const { loadMemory, rememberTurn } = await import("../src/agent/memory");
+    await loadMemory(env);
+    await rememberTurn(env, "питання", `відповідь ${half}`);
+    await handleWithAgents(env, input("привіт"));
+    expect(bodies.length).toBeGreaterThan(0);
+    for (const b of bodies) expect(b).not.toMatch(/\\ud8[0-3][0-9a-f](?!\\ud[c-f])/i);
+  });
+});

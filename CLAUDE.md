@@ -165,4 +165,7 @@ webhook and redirects to the bot; `/api/health` shows the state.
   a line per bot «<Vercel token> <project name> <bot address>» — uploads the code with the Vercel CLI to each project
   (nothing to set up on Vercel's side, no Git connection) and opens each bot's `/api/setup` to wake it. Never put a
   token into the code.
+- Text sent to a model goes through `lib/text.ts`: `safeJson` for every request body (a half emoji — a lone surrogate — is
+  invalid JSON for some providers, and one kept in memory broke every later request), `cutText` instead of `slice` when
+  shortening text; tool-call arguments that are not valid JSON are echoed back as `{}`.
 - Check before pushing: `npm run typecheck && npm test` (tests mock all outbound HTTP; `test/helpers.ts` has a fake Telegram that keeps messages, entities and the pin).

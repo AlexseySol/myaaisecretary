@@ -19,6 +19,7 @@ import { bitrixTools } from "./bitrixTools";
 import { routeByKeywords, routeFollowUp, routeWithDecision } from "./route";
 import { ModelError, OutOfTime, runAgent, str, type Tool } from "./runner";
 import { Progress } from "./progress";
+import { cutText } from "../lib/text";
 import { type Continuation, continuationText, CUT_MS, handOff, MAX_HOPS, RETRY_UNTIL_MS, STEP_UNTIL_MS } from "./continue";
 
 /**
@@ -92,7 +93,7 @@ export interface Step {
 
 const short = (v: unknown, n: number) => {
   const text = typeof v === "string" ? v : JSON.stringify(v ?? null);
-  return text.length > n ? `${text.slice(0, n)}…` : text;
+  return cutText(text, n);
 };
 
 /** The time limits and the step log for one agent's run. */

@@ -1,3 +1,4 @@
+import { cutText } from "../lib/text";
 import type { Env } from "../env";
 import { GoogleAuthRevokedError } from "../google/oauth";
 import { type AgentMessage, type ChatMessage, chatWithTools, type ContentPart, type TokenUsage, type ToolSpec } from "../llm/openrouter";
@@ -66,7 +67,9 @@ export async function runAgent(env: Env, run: AgentRun): Promise<string> {
     if (turn.usage) run.onUsage?.(turn.usage);
     last = turn.content;
     if (!turn.toolCalls.length) return turn.content;
-    messages.push({ role: "assistant", content: turn.content || null, tool_calls: turn.toolCalls });
+    // Arguments that are not valid JSON (a model cut off mid-call) would make the next request invalid too: kept as {}.
+    const calls = turn.toolCalls.map((c) => (validJson(c.function.arguments) ? c : { ...c, function: { ...c.function, arguments: "{}" } }));
+    messages.push({ role: "assistant", content: turn.content || null, tool_calls: calls });
     for (const call of turn.toolCalls) {
       let result: unknown;
       const tool = byName.get(call.function.name);
@@ -84,11 +87,21 @@ export async function runAgent(env: Env, run: AgentRun): Promise<string> {
         result = { error: err instanceof Error ? err.message : String(err) };
       }
       const text = typeof result === "string" ? result : JSON.stringify(result ?? { ok: true });
-      messages.push({ role: "tool", tool_call_id: call.id, content: text.slice(0, MAX_TOOL_RESULT) });
+      messages.push({ role: "tool", tool_call_id: call.id, content: cutText(text, MAX_TOOL_RESULT, "") });
     }
   }
   if (last) return last;
   throw new ModelError(`${run.model}: no answer after ${run.maxIterations} steps`);
+}
+
+function validJson(s: string | undefined): boolean {
+  if (!s) return true;
+  try {
+    JSON.parse(s);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** A string argument, or "" (models sometimes omit optional ones). */
