@@ -395,14 +395,33 @@ export class Bitrix {
   }
 }
 
-function toPerson(u: Record<string, unknown>): Person {
+const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+/** Profile fields that say nothing about the person. */
+const SKIP = /^(ID|ACTIVE|XML_ID|IS_ONLINE|TIME_ZONE.*|LAST_LOGIN|DATE_REGISTER|LAST_ACTIVITY_DATE|USER_TYPE|PERSONAL_PHOTO|PERSONAL_GENDER|UF_EMPLOYMENT_DATE|NAME|LAST_NAME|SECOND_NAME)$/;
+
+/** A user of Bitrix24 with the whole filled-in profile — the company may keep a work email in its own UF_ fields. */
+export function toPerson(u: Record<string, unknown>): Person {
+  const emails: { field: string; email: string }[] = [];
+  const profile: Record<string, string> = {};
+  for (const [field, raw] of Object.entries(u)) {
+    const values = (Array.isArray(raw) ? raw : [raw]).filter((v) => typeof v === "string" || typeof v === "number").map(String);
+    const value = values.join(", ").trim();
+    if (!value) continue;
+    for (const email of value.match(EMAIL_RE) ?? []) if (!emails.some((e) => e.email === email.toLowerCase())) emails.push({ field, email: email.toLowerCase() });
+    if (!SKIP.test(field) && value.length <= 300) profile[field] = value;
+  }
+  // The main email first, then work fields, then the rest.
+  const rank = (f: string) => (f === "EMAIL" ? 0 : /WORK|CORP|UF_/i.test(f) ? 1 : 2);
+  emails.sort((a, b) => rank(a.field) - rank(b.field));
   return {
     id: Number(u.ID),
     name: String(u.NAME ?? ""),
     lastName: String(u.LAST_NAME ?? ""),
     secondName: u.SECOND_NAME ? String(u.SECOND_NAME) : undefined,
-    email: u.EMAIL ? String(u.EMAIL) : undefined,
+    email: emails[0]?.email,
     position: u.WORK_POSITION ? String(u.WORK_POSITION) : undefined,
+    ...(emails.length ? { emails } : {}),
+    ...(Object.keys(profile).length ? { profile } : {}),
   };
 }
 

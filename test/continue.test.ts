@@ -193,3 +193,28 @@ describe("the model's own maker serves it first", () => {
     expect(providerFor("google/gemini-2.5-flash")).toEqual({});
   });
 });
+
+describe("a Bitrix24 profile is read whole", () => {
+  it("every email in any field (the company's own UF_ fields too) and the filled-in profile", async () => {
+    const { toPerson } = await import("../src/bitrix/client");
+    const p = toPerson({
+      ID: "7",
+      NAME: "Юлія",
+      LAST_NAME: "Григорьєва",
+      EMAIL: "j.private@gmail.com",
+      WORK_POSITION: "Менеджер",
+      WORK_PHONE: "+380 44 000 00 00",
+      UF_USR_WORK_EMAIL: "y.grigorieva@company.ua",
+      UF_DEPARTMENT: [12],
+      PERSONAL_MOBILE: "",
+      ACTIVE: true,
+    });
+    expect(p.email).toBe("j.private@gmail.com");
+    expect(p.emails).toEqual([
+      { field: "EMAIL", email: "j.private@gmail.com" },
+      { field: "UF_USR_WORK_EMAIL", email: "y.grigorieva@company.ua" },
+    ]);
+    expect(p.profile).toMatchObject({ WORK_POSITION: "Менеджер", WORK_PHONE: "+380 44 000 00 00", UF_DEPARTMENT: "12" });
+    expect(p.profile).not.toHaveProperty("PERSONAL_MOBILE");
+  });
+});

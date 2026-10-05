@@ -16,6 +16,8 @@ export interface Found {
   name: string;
   email: string;
   from: "календар" | "Bitrix24" | "пошта";
+  /** The Bitrix24 profile field the email is in (EMAIL, a work field, the company's own UF_ field). */
+  field?: string;
   position?: string;
 }
 
@@ -36,7 +38,13 @@ export async function findPerson(env: Env, query: string): Promise<Found[]> {
       console.warn("find_person: bitrix", err instanceof Error ? err.message : err);
       return [];
     });
-    for (const m of people) if (m.person.email) add({ name: fullName(m.person), email: m.person.email, from: "Bitrix24", ...(m.person.position ? { position: m.person.position } : {}) });
+    for (const m of people) {
+      // Every email in the profile — the main one, a work one in the company's own fields, a personal one.
+      const emails = m.person.emails ?? (m.person.email ? [{ field: "EMAIL", email: m.person.email }] : []);
+      for (const e of emails) {
+        add({ name: fullName(m.person), email: e.email, from: "Bitrix24", field: e.field, ...(m.person.position ? { position: m.person.position } : {}) });
+      }
+    }
   }
   // People outside the company: the addresses of the owner's recent mail (only when nothing was found above).
   if (!out.length && (await hasGmailScope(env).catch(() => false))) {
@@ -78,7 +86,7 @@ export function peopleTools(env: Env): Tool[] {
         description:
           "Find a person's email by the name the owner wrote — any case form or alphabet («Юлії Григорьєвій», «Grigorieva»): searches the owner's calendar contacts" +
           (bitrixConfigured(env) ? ", the company's Bitrix24 users" : "") +
-          " and the owner's recent mail (people outside the company). Call it for anyone not in КОНТАКТИ before asking the owner for an email. Several results — ask which one; none — then ask for the email.",
+          " and the owner's recent mail (people outside the company). Call it for anyone not in КОНТАКТИ before asking the owner for an email. One person may have several emails (main, work, personal — `field`): show them and ask which to use unless the owner said. Several people — ask which one; none — then ask for the email.",
         parameters: { type: "object", properties: { query: { type: "string", description: "The name exactly as the owner wrote it" } }, required: ["query"] },
       },
       async run(a) {

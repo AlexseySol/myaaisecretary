@@ -59,6 +59,10 @@ export interface Person {
   secondName?: string;
   email?: string;
   position?: string;
+  /** Every email in the profile, with the field it is in (EMAIL, WORK_…, PERSONAL_…, the company's own UF_… fields). */
+  emails?: { field: string; email: string }[];
+  /** The rest of the filled-in profile: phones, department, company fields… (field → value). */
+  profile?: Record<string, string>;
 }
 
 export interface Match {

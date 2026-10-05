@@ -105,12 +105,20 @@ export function bitrixTools(env: Env): Tool[] {
       spec: {
         name: "find_user",
         description:
-          "Find a colleague in Bitrix24 by what the owner wrote: first and/or last name in any case form or alphabet («Івану Петренку», «Petrenko»), or email. ALWAYS call this before using anybody in a task or filter. Returns candidates, best first; `full: true` means every word matched.",
+          "Find a colleague in Bitrix24 by what the owner wrote: first and/or last name in any case form or alphabet («Івану Петренку», «Petrenko»), or email. ALWAYS call this before using anybody in a task or filter.  Returns candidates, best first, with the whole filled-in profile (phones, department, the company's own fields) and every email in it (allEmails, with the field); `full: true` means every word matched.",
         parameters: object({ query: s("Name, surname or email exactly as the owner wrote it") }, ["query"]),
       },
       async run(a) {
         const matches = await bx.findPeople(str(a, "query"));
-        return matches.map((m) => ({ id: m.person.id, name: fullName(m.person), position: m.person.position, email: m.person.email, full: m.full }));
+        return matches.map((m) => ({
+          id: m.person.id,
+          name: fullName(m.person),
+          position: m.person.position,
+          email: m.person.email,
+          ...(m.person.emails && m.person.emails.length > 1 ? { allEmails: m.person.emails } : {}),
+          ...(m.person.profile ? { profile: m.person.profile } : {}),
+          full: m.full,
+        }));
       },
     },
     {
