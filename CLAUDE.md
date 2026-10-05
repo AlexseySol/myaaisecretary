@@ -167,5 +167,6 @@ webhook and redirects to the bot; `/api/health` shows the state.
   token into the code.
 - Text sent to a model goes through `lib/text.ts`: `safeJson` for every request body (a half emoji — a lone surrogate — is
   invalid JSON for some providers, and one kept in memory broke every later request), `cutText` instead of `slice` when
-  shortening text; tool-call arguments that are not valid JSON are echoed back as `{}`.
+  shortening text; tool-call arguments that are not valid JSON are echoed back as `{}`. `providerFor`: an OpenAI model is
+  served by OpenAI first (OpenRouter's `provider.order`, fallbacks allowed).
 - Check before pushing: `npm run typecheck && npm test` (tests mock all outbound HTTP; `test/helpers.ts` has a fake Telegram that keeps messages, entities and the pin).

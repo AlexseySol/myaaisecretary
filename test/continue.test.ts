@@ -185,3 +185,11 @@ describe("a request body is always valid JSON for the model provider", () => {
     for (const b of bodies) expect(b).not.toMatch(/\\ud8[0-3][0-9a-f](?!\\ud[c-f])/i);
   });
 });
+
+describe("the model's own maker serves it first", () => {
+  it("an OpenAI model goes to OpenAI first, other providers only as the fallback", async () => {
+    const { providerFor } = await import("../src/llm/openrouter");
+    expect(providerFor("openai/gpt-6-luna-pro")).toEqual({ provider: { order: ["openai"], allow_fallbacks: true } });
+    expect(providerFor("google/gemini-2.5-flash")).toEqual({});
+  });
+});

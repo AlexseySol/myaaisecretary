@@ -33,6 +33,15 @@ export function extractJson(text: string): unknown {
   }
 }
 
+/**
+ * Which provider serves a model: OpenRouter picks among several (an OpenAI model is also served by Azure). The model's
+ * own maker goes first; the others stay as the fallback when it is down.
+ */
+export function providerFor(model: string): Record<string, unknown> {
+  const maker = model.split("/")[0];
+  return maker === "openai" ? { provider: { order: ["openai"], allow_fallbacks: true } } : {};
+}
+
 async function complete(env: Env, body: Record<string, unknown>): Promise<string> {
   const res = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -42,7 +51,7 @@ async function complete(env: Env, body: Record<string, unknown>): Promise<string
       "HTTP-Referer": env.PUBLIC_URL,
       "X-Title": "AI-secretary",
     },
-    body: safeJson(body),
+    body: safeJson({ ...body, ...providerFor(String(body.model ?? "")) }),
   });
   await expectOk("openrouter", res);
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; error?: { message: string } };
@@ -120,6 +129,7 @@ export async function chatWithTools(
     },
     body: safeJson({
       model,
+      ...providerFor(model),
       messages,
       ...(tools.length ? { tools: tools.map((t) => ({ type: "function", function: t })) } : {}),
       ...(temperature === undefined ? {} : { temperature }),
