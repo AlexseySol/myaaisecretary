@@ -27,7 +27,13 @@ webhook and redirects to the bot; `/api/health` shows the state.
 - `src/app.ts` — HTTP handlers, setup page, job runner wiring; `src/vercel.ts` — Vercel bootstrap. `/api/setup` only
   registers the Telegram webhook and redirects to the bot (no status page, no how-tos); machine checks are
   `/api/health`.
-- `src/jobs.ts` — background jobs (run after the response, 3 attempts).
+- `src/jobs.ts` — background jobs (run after the response, 3 attempts; `env.jobs.send` stamps `at`, when the invocation
+  began). A function stops at 60 s and a message's whole work runs inside the invocation that received it, so a long
+  request is split (`agent/continue.ts`): no new model step after `STEP_UNTIL_MS`, a model call still running at `CUT_MS`
+  is cut (`runner.ts` `OutOfTime`), the steps done so far (`RunContext.steps`) go, HMAC-signed with ENCRYPTION_KEY, to the
+  bot's own `POST /api/continue` — a fresh invocation — which carries on «without repeating what was done»; at most
+  `MAX_HOPS`, then the owner is told what was done. `agent/progress.ts` — the live mini-log: one message edited as the
+  tools run (plain-word labels), kept across continuations, deleted when the answer comes.
 - `src/agent/` — a strict port of the owner's n8n flows: `index.ts` (Normalize Input / Build Agent Context →
   Supervisor with `calendar_agent` and `gmail_agent` as tools → Parse Agent Output), `runner.ts` (tool-calling
   loop over OpenRouter), `prompts.ts` (the n8n prompts), `calendarTools.ts` (the n8n Calendar MCP tools),

@@ -106,9 +106,11 @@ export async function chatWithTools(
   messages: AgentMessage[],
   tools: ToolSpec[],
   temperature?: number,
+  signal?: AbortSignal,
 ): Promise<{ content: string; toolCalls: ToolCall[]; usage?: TokenUsage }> {
   const res = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
+    signal,
     headers: {
       authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
       "content-type": "application/json",

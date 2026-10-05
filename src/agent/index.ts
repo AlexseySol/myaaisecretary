@@ -16,7 +16,9 @@ import { docsTools } from "./docsTools";
 import { hasWorkspaceScope } from "../google/workspace";
 import { bitrixTools } from "./bitrixTools";
 import { routeByKeywords, routeFollowUp, routeWithDecision } from "./route";
-import { ModelError, runAgent, str, type Tool } from "./runner";
+import { ModelError, OutOfTime, runAgent, str, type Tool } from "./runner";
+import { Progress } from "./progress";
+import { type Continuation, continuationText, CUT_MS, handOff, MAX_HOPS, RETRY_UNTIL_MS, STEP_UNTIL_MS } from "./continue";
 
 /**
  * The n8n "AI Agent ALL" flow: Normalize Input → Build Agent Context → 🧠 Supervisor (with the Calendar Agent and
@@ -68,6 +70,42 @@ export interface RunContext {
   wrote: boolean;
   /** The agent that answered (kept with the answer: a question it asked gets the owner's reply). */
   agent?: AgentName;
+  /** No new model call after this (ms); a call still running at `hardDeadline` is cut off — the work goes on elsewhere. */
+  deadline?: number;
+  hardDeadline?: number;
+  /** What the tools did in this request, for a continuation in a fresh invocation. */
+  steps?: Step[];
+  /** The live mini-log in the chat. */
+  progress?: Progress;
+}
+
+/** One tool call done: which agent, which tool, short arguments and result. */
+export interface Step {
+  agent: string;
+  tool: string;
+  args: string;
+  result: string;
+}
+
+const short = (v: unknown, n: number) => {
+  const text = typeof v === "string" ? v : JSON.stringify(v ?? null);
+  return text.length > n ? `${text.slice(0, n)}…` : text;
+};
+
+/** The time limits and the step log for one agent's run. */
+function limits(ctx: RunContext, agent: string) {
+  return {
+    deadline: ctx.deadline,
+    hardDeadline: ctx.hardDeadline,
+    onBegin(tool: string) {
+      ctx.progress?.step(tool);
+    },
+    onStep(tool: string, args: Record<string, unknown>, result: unknown) {
+      // The sub-agents' calls are logged by the sub-agents themselves.
+      if (tool.endsWith("_agent")) return;
+      (ctx.steps ??= []).push({ agent, tool, args: short(args, 400), result: short(result, 600) });
+    },
+  };
 }
 
 /** Tools that only read; any other tool call changes the calendar or the mailbox. */
@@ -100,6 +138,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
     return runAgent(env, {
       model: ctx.model,
       onTool: tracking(ctx),
+      ...limits(ctx, name),
       system: docsPrompt(await loadOwner(env), now) + noDrive + factsBlock() + conversationBlock(),
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
@@ -115,6 +154,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
     return runAgent(env, {
       model: ctx.model,
       onTool: tracking(ctx),
+      ...limits(ctx, name),
       system: notesPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock(),
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
@@ -128,6 +168,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
     const answer = await runAgent(env, {
       model: ctx.model,
       onTool: tracking(ctx),
+      ...limits(ctx, name),
       system: bitrixPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock(),
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
@@ -147,6 +188,8 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       ? await runAgent(env, {
           model: ctx.model,
           onTool: tracking(ctx),
+          ...limits(ctx, name),
+      ...limits(ctx, name),
           system: calendarPrompt(owner, await loadDirectory(env), now) + factsBlock() + conversationBlock(),
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
@@ -156,6 +199,8 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       : await runAgent(env, {
           model: ctx.model,
           onTool: tracking(ctx),
+          ...limits(ctx, name),
+      ...limits(ctx, name),
           system: gmailPrompt(await loadDirectory(env).catch(() => [])) + factsBlock() + conversationBlock(),
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
@@ -217,6 +262,7 @@ export async function runSupervisor(env: Env, input: AgentInput, ctx: RunContext
 
   const output = await runAgent(env, {
     model: ctx.model,
+    ...limits(ctx, "supervisor"),
     system: supervisorPrompt(bitrixConfigured(env)) + factsBlock() + conversationBlock(),
     history: conversationHistory(),
     input: withImages(chatInput, input.images),
@@ -285,20 +331,59 @@ export function isJunk(text: string): boolean {
   return !/\p{L}{2,}/u.test(plain);
 }
 
+/** The request did not fit even in several invocations: what was done, and what to do. */
+function notFinished(done: Step[]): string {
+  const did = done.filter((d) => !/^(get_|check_|find_|msg_get|thread_get|list_|drive_search|drive_read|sheets_read|note_search|remember_fact)/.test(d.tool));
+  return (
+    "😔 Не встиг виконати запит повністю — він завеликий для одного разу." +
+    (did.length ? `\n\nВже зроблено: ${[...new Set(did.map((d) => d.tool))].join(", ")}.` : "\n\nНічого не змінено.") +
+    "\n\nРозбийте, будь ласка, на кілька коротших повідомлень — напр., спершу зустріч, потім лист."
+  );
+}
+
 const NOT_UNDERSTOOD = "Не зрозумів вас. Напишіть, будь ласка, трохи докладніше, що зробити.";
 
-export async function runWithFallback(env: Env, input: AgentInput): Promise<{ text: string; agent?: AgentName }> {
-  const ctx: RunContext = { model: modelFor(env, input), wrote: false };
-  const retry = async (why: string) => {
+export interface AgentResult {
+  text: string;
+  agent?: AgentName;
+  /** Out of time: the request goes on in a fresh invocation with these steps done, on this model. */
+  handoff?: { steps: Step[]; model: string };
+}
+
+export async function runWithFallback(
+  env: Env,
+  input: AgentInput,
+  opts: { startedAt?: number; model?: string; progress?: Progress } = {},
+): Promise<AgentResult> {
+  const start = opts.startedAt ?? Date.now();
+  const timed = (model: string): RunContext => ({
+    model,
+    wrote: false,
+    deadline: start + STEP_UNTIL_MS,
+    hardDeadline: start + CUT_MS,
+    steps: [],
+    progress: opts.progress,
+  });
+  const ctx = timed(opts.model ?? modelFor(env, input));
+  const later = (c: RunContext, model = c.model): AgentResult => ({ text: "", agent: c.agent, handoff: { steps: c.steps ?? [], model } });
+  const retry = async (why: string): Promise<AgentResult> => {
+    // Not enough time left for a whole second run here: the next invocation runs it on the strong model.
+    if (Date.now() > start + RETRY_UNTIL_MS) return later(ctx, env.LLM_MODEL);
     console.warn(`agent: ${why}; retrying on ${env.LLM_MODEL}`);
-    const again: RunContext = { model: env.LLM_MODEL, wrote: false };
-    const text = await runSupervisor(env, input, again);
-    return { text: isJunk(text) ? NOT_UNDERSTOOD : text, agent: again.agent };
+    const again = timed(env.LLM_MODEL);
+    try {
+      const text = await runSupervisor(env, input, again);
+      return { text: isJunk(text) ? NOT_UNDERSTOOD : text, agent: again.agent };
+    } catch (err) {
+      if (err instanceof OutOfTime) return later(again);
+      throw err;
+    }
   };
   let text: string;
   try {
     text = await runSupervisor(env, input, ctx);
   } catch (err) {
+    if (err instanceof OutOfTime) return later(ctx);
     if (!(err instanceof ModelError) || ctx.wrote || ctx.model === env.LLM_MODEL) throw err;
     return retry(err.message);
   }
@@ -315,17 +400,36 @@ function remainingRows(keyboard: InlineKeyboard | null | undefined, eventId: str
 }
 
 /** The whole flow for one update: run the agents, reply, and settle a pressed button. */
-export async function handleWithAgents(env: Env, input: AgentInput): Promise<void> {
+export async function handleWithAgents(env: Env, input: AgentInput, opts: { startedAt?: number; cont?: Continuation } = {}): Promise<void> {
   const tg = new Telegram(env);
   const rsvp = /^(accept|decline):(.+)$/.exec(input.callbackData ?? "");
   await loadMemory(env);
   let output: string;
+  let progress: Progress | null = null;
   if (rsvp) {
     const done = await answerInvitation(env, rsvp[1] === "accept", rsvp[2]!);
     output = done.answer;
     await rememberTurn(env, done.note, output, Date.now(), "calendar_agent");
   } else {
-    const result = await runWithFallback(env, input);
+    const cont = opts.cont;
+    const runInput = cont ? { ...input, text: continuationText(input.text, cont.done) } : input;
+    progress = new Progress(env, input.chatId, cont?.progress?.id ?? null, cont?.progress?.lines ?? []);
+    const result = await runWithFallback(env, runInput, { startedAt: opts.startedAt, model: cont?.model, progress });
+    if (result.handoff) {
+      // Out of this invocation's time: the request goes on in a fresh one, with what is done so far.
+      await progress.pause();
+      const next: Continuation = {
+        hop: (cont?.hop ?? 0) + 1,
+        done: [...(cont?.done ?? []), ...result.handoff.steps],
+        model: result.handoff.model,
+        progress: { id: progress.messageId, lines: progress.done },
+      };
+      if (next.hop <= MAX_HOPS && (await handOff(env, input, next))) {
+        if (next.hop === 1 && !progress.messageId) await tg.send(input.chatId, "⏳ Запит великий — ще працюю, відповім трохи згодом.").catch(() => undefined);
+        return;
+      }
+      result.text = notFinished(next.done);
+    }
     output = result.text;
     const about = input.replyText ? ` (у відповідь на: «${input.replyText.replace(/\s+/g, " ").slice(0, 120)}»)` : "";
     await rememberTurn(env, `${input.text}${about}`, output, Date.now(), result.agent);
@@ -337,6 +441,8 @@ export async function handleWithAgents(env: Env, input: AgentInput): Promise<voi
     const plain = html.replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
     await tg.send(input.chatId, esc(plain));
   });
+  // The answer is here: the mini-log goes.
+  await progress?.finish();
   // Memory goes back to Drive after the owner already has the answer.
   await saveMemory(env);
   if (input.callbackId) {

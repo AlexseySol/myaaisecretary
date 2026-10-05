@@ -1,4 +1,5 @@
 import { type AgentInput, handleWithAgents } from "./agent";
+import type { Continuation } from "./agent/continue";
 import { type BitrixAction, runBitrixAction } from "./bitrix/menu";
 import { helpText } from "./bot/onboarding";
 import { type Env, gmailPushConfigured } from "./env";
@@ -23,9 +24,10 @@ import { esc, Telegram } from "./telegram/api";
  * Background jobs. They run after the HTTP response (Vercel `waitUntil`). There is no database: a job carries
  * everything it needs.
  */
-export type Job =
-  /** One input for the agents (n8n "AI Agent ALL"); photoIds are Telegram files shown to the model. */
-  | { type: "agent"; input: AgentInput; photoIds: string[]; files?: TgDocument[] }
+export type Job = (
+  /** One input for the agents (n8n "AI Agent ALL"); photoIds are Telegram files shown to the model; `cont` — the
+   * continuation of a request that ran out of an invocation's time (agent/continue.ts). */
+  | { type: "agent"; input: AgentInput; photoIds: string[]; files?: TgDocument[]; cont?: Continuation }
   /** Debounced burst of forwarded messages; processed only if `seq` is still the latest. */
   | { type: "batch"; chatId: number; seq: number }
   /** Transcribe a voice message (n8n "Whisper STT"), then hand it to the agents. */
@@ -49,7 +51,11 @@ export type Job =
   /** After a new version is deployed: tell the owner what is new (bot/news.ts). */
   | { type: "news" }
   /** A /bitrix menu button: task list, analytics or the Excel report. */
-  | { type: "bitrix"; chatId: number; action: BitrixAction };
+  | { type: "bitrix"; chatId: number; action: BitrixAction }
+) & {
+  /** When the invocation running it started (ms), stamped by env.jobs.send: the 60 s count from there. */
+  at?: number;
+};
 
 export const JOB_ATTEMPTS = 3;
 /** Agent runs change things (events, mail): never repeated automatically, as in n8n. */
@@ -106,7 +112,11 @@ export async function runJob(env: Env, job: Job): Promise<void> {
     case "agent":
       return withTyping(env, job.input.chatId, async () => {
         const files = await documents(env, job.files ?? []);
-        await handleWithAgents(env, { ...job.input, text: job.input.text + files.text, images: [...(await images(env, job.photoIds)), ...files.parts] });
+        await handleWithAgents(
+          env,
+          { ...job.input, text: job.input.text + files.text, images: [...(job.input.images ?? []), ...(await images(env, job.photoIds)), ...files.parts] },
+          { startedAt: job.at, cont: job.cont },
+        );
       });
     case "batch": {
       const batch = takeBatch(job.chatId, job.seq);
@@ -114,7 +124,7 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       const photos = batch.lines.map((l) => PHOTO_MARK.exec(l)?.[1]).filter((x): x is string => !!x);
       const text = `Переслана переписка:\n${batch.lines.filter((l) => !PHOTO_MARK.test(l)).join("\n")}`;
       return withTyping(env, job.chatId, async () =>
-        handleWithAgents(env, { chatId: job.chatId, inputType: "forward", text, images: await images(env, photos) }),
+        handleWithAgents(env, { chatId: job.chatId, inputType: "forward", text, images: await images(env, photos) }, { startedAt: job.at }),
       );
     }
     case "voice":
@@ -127,7 +137,7 @@ export async function runJob(env: Env, job: Job): Promise<void> {
           return;
         }
         await tg.send(job.chatId, `🎙 <i>${esc(text)}</i>`, { replyTo: job.messageId });
-        await handleWithAgents(env, { chatId: job.chatId, inputType: "voice", text, replyText: job.replyText, replyRef: job.replyRef });
+        await handleWithAgents(env, { chatId: job.chatId, inputType: "voice", text, replyText: job.replyText, replyRef: job.replyRef }, { startedAt: job.at });
       });
     case "sync":
       if (await hasGoogleAuth(env)) await syncRecent(env);

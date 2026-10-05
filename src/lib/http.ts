@@ -33,7 +33,8 @@ export async function fetchWithRetry(
       await res.body?.cancel();
     } catch (err) {
       lastError = err;
-      if (attempt === attempts) throw err;
+      // Out of time (the caller's own deadline): another try would be out of time too.
+      if (attempt === attempts || init.signal?.aborted) throw err;
     }
     await new Promise((r) => setTimeout(r, baseDelayMs * attempt));
   }

@@ -21,6 +21,14 @@ export interface AgentRun {
   onTool?(name: string): void;
   /** Called with each model call's token usage (the model comparison script adds them up). */
   onUsage?(usage: TokenUsage): void;
+  /** Called before each tool call (the live mini-log in the chat). */
+  onBegin?(name: string): void;
+  /** Called after each tool call with its arguments and result (what was done, for a continuation). */
+  onStep?(name: string, args: Record<string, unknown>, result: unknown): void;
+  /** No new model call after this time (ms): OutOfTime, the work goes on elsewhere. */
+  deadline?: number;
+  /** A model call still running at this time is cut off: OutOfTime. */
+  hardDeadline?: number;
 }
 
 /** The model failed (API error, or no answer within maxIterations): the caller may retry on a stronger model. */
@@ -32,12 +40,27 @@ const MAX_TOOL_RESULT = 12_000;
  * The n8n AI Agent loop: the model answers or calls tools; tool results go back to it until it answers.
  * A failing tool returns its error to the model instead of aborting, as n8n does.
  */
+/**
+ * The request ran out of its time (Vercel stops a function at 60 s): the work goes on in a fresh invocation
+ * (agent/index.ts, /api/continue) with what was already done. Thrown before a model call that could not finish in time.
+ */
+export class OutOfTime extends Error {
+  constructor() {
+    super("out of time");
+  }
+}
+
 export async function runAgent(env: Env, run: AgentRun): Promise<string> {
   const byName = new Map(run.tools.map((t) => [t.spec.name, t]));
   const messages: AgentMessage[] = [{ role: "system", content: run.system }, ...run.history, { role: "user", content: run.input }];
   let last = "";
   for (let i = 0; i < run.maxIterations; i++) {
-    const turn = await chatWithTools(env, run.model, messages, run.tools.map((t) => t.spec), run.temperature).catch((err: unknown) => {
+    // No new step once the time for steps is over: the rest goes on in a fresh invocation.
+    if (run.deadline && Date.now() > run.deadline) throw new OutOfTime();
+    const left = run.hardDeadline ? run.hardDeadline - Date.now() : 0;
+    const signal = run.hardDeadline ? AbortSignal.timeout(Math.max(1000, left)) : undefined;
+    const turn = await chatWithTools(env, run.model, messages, run.tools.map((t) => t.spec), run.temperature, signal).catch((err: unknown) => {
+      if (signal?.aborted) throw new OutOfTime();
       throw new ModelError(`${run.model}: ${err instanceof Error ? err.message : String(err)}`);
     });
     if (turn.usage) run.onUsage?.(turn.usage);
@@ -51,11 +74,13 @@ export async function runAgent(env: Env, run: AgentRun): Promise<string> {
         if (!tool) throw new Error(`Unknown tool ${call.function.name}`);
         const args = call.function.arguments ? (JSON.parse(call.function.arguments) as Record<string, unknown>) : {};
         run.onTool?.(call.function.name);
+        run.onBegin?.(call.function.name);
         result = await tool.run(args);
+        run.onStep?.(call.function.name, args, result);
       } catch (err) {
         // A revoked Google grant ends the run: the owner is asked to reconnect (jobs.ts). A nested agent's model
-        // failure ends it too, so the whole request can be retried on the stronger model.
-        if (err instanceof GoogleAuthRevokedError || err instanceof ModelError) throw err;
+        // failure ends it too, so the whole request can be retried on the stronger model; so does running out of time.
+        if (err instanceof GoogleAuthRevokedError || err instanceof ModelError || err instanceof OutOfTime) throw err;
         result = { error: err instanceof Error ? err.message : String(err) };
       }
       const text = typeof result === "string" ? result : JSON.stringify(result ?? { ok: true });

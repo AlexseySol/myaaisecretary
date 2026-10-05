@@ -18,6 +18,8 @@ import { esc, Telegram } from "./telegram/api";
 import { checkReminders } from "./google/reminders";
 import { firstTime } from "./session";
 import { handleUpdate } from "./telegram/handler";
+import type { AgentInput } from "./agent";
+import { type Continuation, verifyContinuation } from "./agent/continue";
 import type { TgUpdate } from "./telegram/types";
 
 export interface Runtime {
@@ -34,10 +36,12 @@ export function createEnv(config: Config, runtime: Runtime): Env {
     ...config,
     jobs: {
       async send(job: Job, opts?: { delaySeconds?: number }) {
+        // When this invocation began its job: a function stops 60 s after it started (agent/continue.ts).
+        const at = job.at ?? Date.now();
         runtime.defer(
           (async () => {
             if (opts?.delaySeconds) await runtime.sleep(opts.delaySeconds * 1000);
-            await runWithRetry(env, job, runtime.sleep);
+            await runWithRetry(env, { ...job, at }, runtime.sleep);
           })(),
         );
       },
@@ -89,6 +93,19 @@ export async function telegramWebhook(req: Request, env: Env, runtime: Runtime):
     }),
   );
   return new Response("ok");
+}
+
+/**
+ * POST /api/continue — the bot's own call (agent/continue.ts): a request that ran out of a function's 60 s goes on here,
+ * in a fresh invocation, with what was already done. Signed with the bot's key; only for the owner's chat.
+ */
+export async function continueWebhook(req: Request, env: Env): Promise<Response> {
+  const body = await req.text();
+  if (!verifyContinuation(env, body, req.headers.get("x-ais-sign"))) return new Response("forbidden", { status: 403 });
+  const { input, cont } = JSON.parse(body) as { input: AgentInput; cont: Continuation };
+  if (input?.chatId !== env.OWNER_TELEGRAM_ID || !cont || !(cont.hop >= 1)) return new Response("bad request", { status: 400 });
+  await env.jobs.send({ type: "agent", input, photoIds: [], cont });
+  return new Response("accepted", { status: 202 });
 }
 
 /**
