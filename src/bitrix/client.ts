@@ -170,6 +170,12 @@ export class Bitrix {
   }
 
   /** The owner (whose webhook this is). */
+  /** The rights the webhook was given (Bitrix24 `scope`); null when the portal does not say. */
+  async scopes(): Promise<string[] | null> {
+    const { result } = await this.call<unknown>("scope");
+    return Array.isArray(result) && result.length ? result.map(String) : null;
+  }
+
   async me(): Promise<Person> {
     if (meCache) return meCache;
     const { result } = await this.call<Record<string, string>>("user.current");
@@ -441,6 +447,7 @@ export function toPerson(u: Record<string, unknown>): Person {
  * preview (agent/index.ts NEEDS_YES).
  */
 export const BITRIX_READ = new Set([
+  "scope",
   "user.current",
   "user.get",
   "tasks.task.list",
@@ -452,6 +459,17 @@ export const BITRIX_READ = new Set([
   "sonet_group.get",
 ]);
 const BITRIX_WRITE = new Set(["task.commentitem.add", "im.message.add", "tasks.task.add"]);
+/** The webhook rights the bot needs, in the words of Bitrix24's webhook form. */
+export const BITRIX_NEEDED = [
+  { scope: "task", name: "Задачі", why: "читати й ставити задачі" },
+  { scope: "user", name: "Користувачі", why: "знаходити людей та їхні email" },
+  { scope: "im", name: "Чат і повідомлення", why: "читати «Чат завдання»" },
+] as const;
+
+export function missingScopes(have: string[]): (typeof BITRIX_NEEDED)[number][] {
+  return BITRIX_NEEDED.filter((n) => !have.includes(n.scope));
+}
+
 export const BITRIX_ALLOWED = new Set([...BITRIX_READ, ...BITRIX_WRITE, "batch"]);
 
 function toComment(c: Record<string, string>): BxComment {

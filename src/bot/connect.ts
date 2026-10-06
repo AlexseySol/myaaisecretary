@@ -1,4 +1,4 @@
-import { Bitrix, resetBitrixCache } from "../bitrix/client";
+import { Bitrix, BITRIX_NEEDED, missingScopes, resetBitrixCache } from "../bitrix/client";
 import { bitrixUrl, ConfigError, type Env } from "../env";
 import { loadIntegrations, saveIntegrations } from "../google/oauth";
 import { applyIntegrations } from "../integrations";
@@ -92,9 +92,25 @@ export async function handleConnectAnswer(env: Env, msg: TgMessage, text: string
       await tg.send(msg.chat.id, "Це не схоже на адресу вебхука Bitrix24 (<code>https://…/rest/1/…/</code>).", retry);
       return true;
     }
+    const bitrix = new Bitrix({ BITRIX_WEBHOOK_URL: url });
+    // First the rights: a webhook without one of them half-works, so it is not saved until it has them all.
+    const have = await bitrix.scopes().catch(() => null);
+    const missing = have ? missingScopes(have) : [];
+    if (missing.length) {
+      const lines = BITRIX_NEEDED.map((n) => `${missing.includes(n) ? "❌" : "✅"} <b>${n.name}</b> — ${n.why}`);
+      await tg.send(
+        msg.chat.id,
+        "⚠️ <b>Вебхуку Bitrix24 бракує прав</b>\n\n" +
+          lines.join("\n") +
+          "\n\nУ Bitrix24: <b>Розробникам → Інше → Вхідний вебхук</b> → відкрийте цей вебхук → додайте позначені ❌ права → <b>Зберегти</b>. " +
+          "Адреса лишається та сама — надішліть її ще раз.",
+        retry,
+      );
+      return true;
+    }
     let who: string;
     try {
-      const me = await new Bitrix({ BITRIX_WEBHOOK_URL: url }).me();
+      const me = await bitrix.me();
       who = [me.name, me.lastName].filter(Boolean).join(" ");
     } catch {
       await tg.send(msg.chat.id, "😔 Bitrix24 не прийняв цей вебхук. Перевірте адресу й права «Задачі», «Користувачі» та «Чат і повідомлення».", retry);

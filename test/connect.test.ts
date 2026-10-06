@@ -69,6 +69,30 @@ describe("connecting Bitrix24 and Zoom from /settings (no deployment variables)"
     expect(tgCalls(calls, "deleteMessage")).toHaveLength(1);
   });
 
+  it("Bitrix24: a webhook without all the rights it needs is not saved; the missing ones are named", async () => {
+    await connectGoogle();
+    let scopes = ["task", "user"];
+    mockFetch([
+      (url) => (url.href === `${WEBHOOK}scope.json` ? Response.json({ result: scopes }) : undefined),
+      bitrixOk,
+    ]);
+    const { env } = testEnv();
+    await handleUpdate(env, press("set:on:bitrix", lastBotMessage("Google підключено")));
+    await handleUpdate(env, text(WEBHOOK));
+    const warn = lastBotMessage("бракує прав").text;
+    expect(warn).toContain("❌ <b>Чат і повідомлення</b>");
+    expect(warn).toContain("✅ <b>Задачі</b>");
+    resetGoogleCache();
+    expect(await loadIntegrations(env)).toEqual({});
+
+    scopes = ["task", "user", "im", "crm"];
+    await handleUpdate(env, press("set:on:bitrix", lastBotMessage("бракує прав")));
+    await handleUpdate(env, text(WEBHOOK));
+    expect(lastBotMessage("Bitrix24 підключено").text).toContain("Олександр Коваленко");
+    resetGoogleCache();
+    expect(await loadIntegrations(env)).toEqual({ bitrix: WEBHOOK });
+  });
+
   it("Zoom: three values, checked against Zoom, stored — works even before Google is connected", async () => {
     let basic = "";
     mockFetch([
