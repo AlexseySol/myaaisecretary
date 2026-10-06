@@ -53,6 +53,10 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&envDescription=Your+numeric+Telegram+ID+%28%40userinfobot%29%2C+bot+token+%28%40BotFather%29%2C+OpenRouter+API+key&envLink=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary%23deploy&project-name=aisecretary&repository-name=aisecretary)
 
+Vercel позначить `TELEGRAM_BOT_TOKEN` і `OPENROUTER_API_KEY` як «Потребує уваги» — це лише порада сховати ключі. Щоб прибрати:
+Project → **Settings → Environment Variables** → у кожного ключа **⋯ → Delete**, потім **Add New** з тим самим іменем і
+значенням та ввімкненим **Sensitive** → **Save** → **Deployments → ⋯ → Redeploy**. Бот працює й без цього.
+
 Потрібні три речі — токен бота, ваш Telegram ID і ключ OpenRouter. Google підключається потім у самому боті:
 напишіть йому `/start`. Де взяти кожну річ (і все необовʼязкове) — **[docs/what-you-need.md](docs/what-you-need.md)**.
 
