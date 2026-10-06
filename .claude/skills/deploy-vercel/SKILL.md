@@ -64,7 +64,7 @@ If a check fails: say which item is wrong and why, and ask for that item only.
 ## Step 3 — project, variables, deploy
 
 1. **Project — the user's own GitHub copy, connected to Vercel.** That is what makes the bot update itself: the copy
-   has `.github/workflows/update.yml` (every hour it takes the new `main` of github.com/Mem341/aisecretary once its
+   has `.github/workflows/update.yml` (every 5 minutes it takes the new `main` of github.com/Mem341/aisecretary once its
    checks pass; Vercel builds every push). No token or secret for it.
    - Simplest: the Vercel clone link from `AGENTS.md` §3 — Vercel creates the copy in the user's GitHub and the project
      itself (preset **Other**, no build command, root `/`), and asks for the three variables.

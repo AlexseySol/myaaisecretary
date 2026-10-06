@@ -141,13 +141,13 @@ Drive. Голосові розпізнає той самий OpenRouter.
 ## Оновлення: бот оновлюється сам
 
 Якщо бота розгорнуто кнопкою **Deploy** (або агентом) — у вашому GitHub є його копія, підключена до Vercel. У ній
-працює `.github/workflows/update.yml`: щогодини вона бере нову версію з github.com/Mem341/aisecretary (лише коли її
+працює `.github/workflows/update.yml`: кожні 5 хвилин вона бере нову версію з github.com/Mem341/aisecretary (лише коли її
 перевірки пройшли), Vercel сам її збирає, а щойно збірка готова, `wake.yml` будить бота — і він одразу пише
 «🆕 Бот оновлено». Ні токенів, ні секретів, нічого у Vercel.
 Оновити одразу: GitHub → ваша копія → **Actions → Update from Mem341/aisecretary → Run workflow**.
 
 **Форк** (Fork на GitHub): GitHub вимикає в ньому Actions — один раз відкрийте вкладку **Actions** у своєму форку й
-натисніть **«I understand my workflows, go ahead and enable them»**. Далі форк оновлюється сам щогодини, як кнопка
+натисніть **«I understand my workflows, go ahead and enable them»**. Далі форк оновлюється сам кожні 5 хвилин, як кнопка
 «Sync fork». Якщо форк зроблено давно й файлу `.github/workflows/update.yml` у ньому немає — один раз натисніть
 **Sync fork** на сторінці форку.
 

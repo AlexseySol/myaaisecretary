@@ -51,7 +51,7 @@ Order: **first ask for the three values (section 2) in one message, then deploy.
   <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
   «Откройте ссылку → войдите в Vercel → вставьте 3 значения → Deploy. Потом откройте https://<проект>.vercel.app/api/setup.»
 - **Deploy it as the user's own GitHub copy connected to Vercel** — that is how the bot updates itself: the copy
-  carries `.github/workflows/update.yml`, which every hour takes the new version of `main` of
+  carries `.github/workflows/update.yml`, which every 5 minutes takes the new version of `main` of
   github.com/Mem341/aisecretary (once its checks pass), and Vercel rebuilds every push. No token, no secret, nothing
   to set up on Vercel. The simplest way is this link: Vercel itself creates the copy in the user's GitHub, connects it
   and asks for the same three values. Give it to the user (or open it with your tools) and say «вставьте 3 значения в
