@@ -78,7 +78,7 @@ async function bitrixTab(env: Env): Promise<View> {
   const source = integrationSource(env, "bitrix");
   if (bitrixConfigured(env)) {
     return {
-      html: "📋 <b>Bitrix24</b>\n\n✅ Підключено. Пишіть «мої задачі», «що горить?», «постав Івану задачу …» або відкрийте /bitrix.\n\nЗакривати, змінювати чи видаляти задачі я не можу — лише читаю, коментую й створюю нові.",
+      html: "📋 <b>Bitrix24</b>\n\n✅ Підключено. Пишіть «мої задачі», «що горить?», «постав Івану задачу …», «напиши в чат … що …» або відкрийте /bitrix.\n\nЗакривати, змінювати чи видаляти задачі я не можу — лише читаю, коментую й створюю нові. Пишу лише в групові чати, не в особисті.",
       keyboard: [...(source === "settings" ? [[{ text: "❌ Відключити Bitrix24", callback_data: "set:off:bitrix" }]] : []), back],
     };
   }

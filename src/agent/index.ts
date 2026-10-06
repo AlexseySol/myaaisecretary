@@ -137,6 +137,7 @@ export const NEEDS_YES = new Set([
   "draft_delete",
   "label_delete",
   "add_comment",
+  "send_chat_message",
   "create_task",
   "sheets_append",
   "sheets_update",

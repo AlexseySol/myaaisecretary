@@ -221,6 +221,27 @@ export function bitrixTools(env: Env): Tool[] {
     },
     {
       spec: {
+        name: "find_chat",
+        description: "Find a Bitrix24 GROUP chat the owner is in, by part of its name. Personal dialogs are never returned.",
+        parameters: object({ query: s("Part of the chat name, as the owner said it") }, ["query"]),
+      },
+      async run(a) {
+        const chats = await bx.findChats(str(a, "query"));
+        return chats.length ? { chats } : { chats: [], note: "Груповий чат не знайдено — спитай точнішу назву." };
+      },
+    },
+    {
+      spec: {
+        name: "send_chat_message",
+        description: "Send a message to a Bitrix24 GROUP chat (chatId from find_chat), from the owner. Only after the owner confirmed the preview. Personal messages to people are impossible.",
+        parameters: object({ chatId: { type: "integer" }, text: s("Message text") }, ["chatId", "text"]),
+      },
+      async run(a) {
+        return { ok: true, messageId: await bx.sendToChat(Number(a.chatId), str(a, "text")) };
+      },
+    },
+    {
+      spec: {
         name: "create_task",
         description:
           "Create a Bitrix24 task (the owner is its creator). Only after the owner confirmed the preview. People are user IDs from find_user; deadline in ISO with the Kyiv offset.",

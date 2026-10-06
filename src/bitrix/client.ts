@@ -132,6 +132,10 @@ export class Bitrix {
   async call<T>(method: string, params: Record<string, unknown> = {}): Promise<{ result: T; next?: number; total?: number }> {
     // A hard lock whatever rights the webhook has: only these methods ever leave the bot.
     if (!BITRIX_ALLOWED.has(method)) throw new Error(`Bitrix24: method «${method}» is not allowed for the bot`);
+    // Messages go only to group chats (a task's chat included) — never to a person's private dialog.
+    if (method === "im.message.add" && !/^chat\d+$/.test(String(params.DIALOG_ID ?? ""))) {
+      throw new Error("Bitrix24: the bot writes only to group chats");
+    }
     if (method === "batch") {
       const cmd = (params.cmd ?? {}) as Record<string, string>;
       for (const c of Object.values(cmd)) {
@@ -379,6 +383,22 @@ export class Bitrix {
     return result;
   }
 
+  /** Group chats the owner is in, by part of the name (never personal dialogs). */
+  async findChats(query: string): Promise<{ id: number; title: string; type: string }[]> {
+    const { result } = await this.call<Record<string, unknown>[]>("im.search.chat.list", { FIND: query, LIMIT: 20 });
+    return (Array.isArray(result) ? result : [])
+      .map((c) => ({ id: Number(c.id ?? c.ID), title: String(c.title ?? c.name ?? c.NAME ?? ""), type: String(c.type ?? c.TYPE ?? "") }))
+      .filter((c) => c.id && c.type !== "private");
+  }
+
+  /** A message to a group chat; a personal dialog is refused. */
+  async sendToChat(chatId: number, text: string): Promise<number> {
+    const { result: dialog } = await this.call<{ type?: string; name?: string }>("im.dialog.get", { DIALOG_ID: `chat${chatId}` });
+    if (!dialog || dialog.type === "private") throw new Error("Bitrix24: the bot writes only to group chats");
+    const { result } = await this.call<number>("im.message.add", { DIALOG_ID: `chat${chatId}`, MESSAGE: text });
+    return result;
+  }
+
   async createTask(fields: Record<string, unknown>): Promise<BxTask> {
     const { result } = await this.call<{ task: BxTask }>("tasks.task.add", { fields });
     return result.task;
@@ -442,8 +462,8 @@ export function toPerson(u: Record<string, unknown>): Person {
 
 /**
  * Every Bitrix24 method the bot may call — whatever rights the webhook was given (even full access), the bot reads
- * tasks, people and task chats, writes a comment and creates a task; it can never close, change, delegate or delete a
- * task, write to any other chat, or touch CRM, files, users or settings. Writes run only after the owner's «так» to a
+ * tasks, people and task chats, writes a comment, creates a task and writes to a group chat; it can never close, change,
+ * delegate or delete a task, write to a person's private dialog, or touch CRM, files, users or settings. Writes run only after the owner's «так» to a
  * preview (agent/index.ts NEEDS_YES).
  */
 export const BITRIX_READ = new Set([
@@ -456,6 +476,8 @@ export const BITRIX_READ = new Set([
   "task.commentitem.getlist",
   "im.chat.get",
   "im.dialog.messages.get",
+  "im.dialog.get",
+  "im.search.chat.list",
   "sonet_group.get",
 ]);
 const BITRIX_WRITE = new Set(["task.commentitem.add", "im.message.add", "tasks.task.add"]);
@@ -463,7 +485,7 @@ const BITRIX_WRITE = new Set(["task.commentitem.add", "im.message.add", "tasks.t
 export const BITRIX_NEEDED = [
   { scope: "task", name: "Задачі", why: "читати й ставити задачі" },
   { scope: "user", name: "Користувачі", why: "знаходити людей та їхні email" },
-  { scope: "im", name: "Чат і повідомлення", why: "читати «Чат завдання»" },
+  { scope: "im", name: "Чат і повідомлення", why: "читати «Чат завдання» й писати в групові чати" },
 ] as const;
 
 export function missingScopes(have: string[]): (typeof BITRIX_NEEDED)[number][] {

@@ -128,8 +128,8 @@ describe("Bitrix24 task agent", () => {
   it("reads, comments and creates — no tool can close, change or delete a task", () => {
     const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
     const names = bitrixTools(env).map((t) => t.spec.name);
-    expect(names).toEqual(["find_user", "list_tasks", "get_task", "get_task_comments", "add_comment", "create_task", "find_project", "task_stats"]);
-    expect(names.join(" ")).not.toMatch(/delete|close|complete|update|defer|delegate/);
+    expect(names).toEqual(["find_user", "list_tasks", "get_task", "get_task_comments", "add_comment", "find_chat", "send_chat_message", "create_task", "find_project", "task_stats"]);
+    expect(names.join(" ")).not.toMatch(/delete|close|complete|update|defer|delegate|private|personal|direct/);
   });
 
   it("task words go straight to the task agent when Bitrix24 is connected", () => {
@@ -390,5 +390,37 @@ describe("the task chat («Чат завдання») of new Bitrix24 task cards
       { method: "im.message.add", body: { DIALOG_ID: "chat777", MESSAGE: "Документи надіслано" } },
       { method: "task.commentitem.add", body: { TASKID: 123, FIELDS: { POST_MESSAGE: "Цифри будуть завтра" } } },
     ]);
+  });
+});
+
+describe("Bitrix24 group chats: the bot writes only there, never to a person", () => {
+  it("finds group chats, sends to one; a private dialog or a person's ID is refused in code", async () => {
+    const { Bitrix } = await import("../src/bitrix/client");
+    const sent: string[] = [];
+    mockFetch([
+      (url, init) => {
+        if (!url.href.startsWith(WEBHOOK)) return undefined;
+        const method = url.pathname.split("/").at(-1)!.replace(/\.json$/, "");
+        const body = JSON.parse(init.bodyText || "{}");
+        if (method === "im.search.chat.list") {
+          return Response.json({ result: [{ id: 55, title: "Відділ продажів", type: "chat" }, { id: 66, title: "Іван Петренко", type: "private" }] });
+        }
+        if (method === "im.dialog.get") return Response.json({ result: { type: body.DIALOG_ID === "chat66" ? "private" : "chat" } });
+        if (method === "im.message.add") {
+          sent.push(body.DIALOG_ID);
+          return Response.json({ result: 901 });
+        }
+        return undefined;
+      },
+    ]);
+    const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
+    const tools = bitrixTools(env);
+    const find = tools.find((t) => t.spec.name === "find_chat")!;
+    expect(await find.run({ query: "продаж" })).toEqual({ chats: [{ id: 55, title: "Відділ продажів", type: "chat" }] });
+    const send = tools.find((t) => t.spec.name === "send_chat_message")!;
+    expect(await send.run({ chatId: 55, text: "Нарада о 15:00" })).toEqual({ ok: true, messageId: 901 });
+    await expect(send.run({ chatId: 66, text: "привіт" })).rejects.toThrow(/only to group chats/);
+    await expect(new Bitrix({ BITRIX_WEBHOOK_URL: WEBHOOK }).call("im.message.add", { DIALOG_ID: "7", MESSAGE: "x" })).rejects.toThrow(/only to group chats/);
+    expect(sent).toEqual(["chat55"]);
   });
 });
