@@ -278,6 +278,12 @@ describe("a burst of messages is one request; a chat runs one request at a time"
     await handleWithAgents(env, input("постав зустріч"));
     const preview = tgCalls(calls, "sendMessage").at(-1)!;
     expect(JSON.stringify(preview.reply_markup)).toContain("ok:yes");
+    // The choices are only the buttons — not spelled out in the text.
+    expect(String(preview.text)).toContain("Підтверджуєте?");
+    expect(String(preview.text)).not.toContain("(так");
+    const { withoutAnswerHint } = await import("../src/agent");
+    expect(withoutAnswerHint("Надіслати? (так / змінити)\nСтворити? (да/нет)")).toBe("Надіслати?\nСтворити?");
+    expect(withoutAnswerHint("Зустріч (тест) о 15:00")).toBe("Зустріч (тест) о 15:00");
     const press = (data: string) => ({
       update_id: 99,
       callback_query: { id: "cb", from: { id: OWNER, is_bot: false, first_name: "О" }, data, message: { message_id: 50, date: 0, chat: { id: OWNER, type: "private" as const }, text: "📋 Перевірте зустріч" } },

@@ -66,7 +66,7 @@ function brief(ev: GEvent): Record<string, unknown> {
 const object = (properties: Record<string, unknown>, required: string[]) => ({ type: "object", properties, required });
 const s = (description: string) => ({ type: "string", description });
 
-/** Words that ask to remove a meeting, and short confirmations (the owner answering «Видалити? (так / ні)»). */
+/** Words that ask to remove a meeting, and short confirmations (the owner answering «Видалити?» — ✅ under it is «так»). */
 const DELETE_WORDS = /видал|удал|скасу|отмен|відмін|прибер|cancel|delete|remove/i;
 const CONFIRM = /^\s*(так|да|yes|ок|ok|давай|підтверджую|подтверждаю)(?=$|[\s,.!])/i;
 const ALL_WORDS = /(^|\s)(все|всі|усі|всё|all)(\s|$)/i;
@@ -85,7 +85,7 @@ export function deletionAllowed(currentText: string | undefined, deletedAlready:
   // Each meeting named in the message itself («видали ЫЫ і ТЕСТ») is asked for explicitly.
   const named = title.trim().length >= 2 && text.toLowerCase().includes(title.trim().toLowerCase());
   if (!confirmed && !named && (deletedAlready > 0 || ALL_WORDS.test(text))) {
-    return "Deleting several meetings needs the owner's explicit confirmation first: list them and ask «Видалити? (так / ні)». Do not delete now.";
+    return "Deleting several meetings needs the owner's explicit confirmation first: list them in a preview that starts with «📋» and ask «Видалити?» (the owner answers with the ✅ / ✏️ buttons). Do not delete now.";
   }
   return null;
 }

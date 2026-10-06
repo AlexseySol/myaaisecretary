@@ -176,6 +176,14 @@ export const PREVIEW_BUTTONS: InlineKeyboard = [
   ],
 ];
 
+/** «(так / змінити)», «(да/нет)» — the answers spelled out in text; under a preview the buttons say it. */
+const ANSWER_HINT = /[ \t]*\((?:так|да|yes)\s*\/\s*[^()\n]{1,25}\)/gi;
+
+/** A preview shows its choices only as buttons, never as text. */
+export function withoutAnswerHint(html: string): string {
+  return html.replace(ANSWER_HINT, "");
+}
+
 /** An answer that is a preview waiting for «так». */
 export function isPreview(html: string): boolean {
   return html.replace(/<[^>]+>/g, "").trimStart().startsWith(PREVIEW_MARK);
@@ -211,7 +219,7 @@ function guarded(tools: Tool[], yes: boolean): Tool[] {
           run: async () => ({
             error:
               `НЕ виконано: спершу покажи власнику превʼю — повідомлення, що починається з «${PREVIEW_MARK}», з усіма даними ` +
-              "(хто, що, коли, кому — з email) — і закінчи питанням «Підтверджуєте? (так / змінити)». Виконаєш, коли власник відповість «так».",
+              "(хто, що, коли, кому — з email) — і закінчи коротким питанням «Підтверджуєте?» (варіанти відповіді не пиши — під превʼю самі зʼявляться кнопки ✅ Так / ✏️ Змінити). Виконаєш, коли власник відповість «так».",
           }),
         }
       : t,
@@ -548,9 +556,12 @@ export async function handleWithAgents(env: Env, input: AgentInput, opts: { star
     const about = input.replyText ? ` (у відповідь на: «${input.replyText.replace(/\s+/g, " ").slice(0, 120)}»)` : "";
     await rememberTurn(env, `${input.text}${about}`, output, Date.now(), result.agent);
   }
-  const html = toTelegramHtml(output);
-  // A preview waits for the owner: ✅ Так / ✏️ Змінити under it (✅ is the same as typing «так»).
-  const sendOpts = { ...(input.messageId ? { replyTo: input.messageId } : {}), ...(isPreview(html) ? { keyboard: PREVIEW_BUTTONS } : {}) };
+  const formatted = toTelegramHtml(output);
+  const preview = isPreview(formatted);
+  // A preview waits for the owner: ✅ Так / ✏️ Змінити under it (✅ is the same as typing «так») — the choices only as
+  // buttons, never spelled out in the text.
+  const html = preview ? withoutAnswerHint(formatted) : formatted;
+  const sendOpts = { ...(input.messageId ? { replyTo: input.messageId } : {}), ...(preview ? { keyboard: PREVIEW_BUTTONS } : {}) };
   await tg.send(input.chatId, html, sendOpts).catch(async (err) => {
     // Telegram rejected the markup (e.g. a broken link): the same answer as plain text.
     if (!(err instanceof HttpError && err.status === 400)) throw err;
