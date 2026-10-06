@@ -111,6 +111,8 @@ function bitrixRoute(writes: { method: string; body: Record<string, unknown> }[]
       case "im.message.add":
         writes.push({ method, body });
         return Response.json({ result: 91 });
+      case "im.dialog.get":
+        return Response.json({ result: { type: "chat", name: "Відділ продажів" } });
       case "tasks.task.add":
         writes.push({ method, body });
         return Response.json({ result: { task: { id: "200", title: "x", status: "2" } } });
@@ -128,8 +130,8 @@ describe("Bitrix24 task agent", () => {
   it("reads, comments and creates — no tool can close, change or delete a task", () => {
     const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
     const names = bitrixTools(env).map((t) => t.spec.name);
-    expect(names).toEqual(["find_user", "list_tasks", "get_task", "get_task_comments", "add_comment", "find_chat", "send_chat_message", "create_task", "find_project", "task_stats"]);
-    expect(names.join(" ")).not.toMatch(/delete|close|complete|update|defer|delegate|private|personal|direct/);
+    expect(names).toEqual(["find_user", "list_tasks", "get_task", "get_task_comments", "add_comment", "find_chat", "send_chat_message", "send_direct_message", "create_task", "find_project", "task_stats"]);
+    expect(names.join(" ")).not.toMatch(/delete|close|complete|update|defer|delegate/);
   });
 
   it("task words go straight to the task agent when Bitrix24 is connected", () => {
@@ -166,6 +168,29 @@ describe("Bitrix24 task agent", () => {
       { method: "tasks.task.add", body: { fields: { TITLE: "Підготувати договір", RESPONSIBLE_ID: 7, DEADLINE: "2026-10-02T18:00:00+03:00", PRIORITY: "2" } } },
     ]);
     expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("Задачу створено");
+  });
+});
+
+describe("«так» to a personal-message preview", () => {
+  it("the model's slip to a group chat is refused; the message goes only to the person in the preview", async () => {
+    const writes: { method: string; body: Record<string, unknown> }[] = [];
+    const seen: LlmRequest[] = [];
+    let step = 0;
+    mockFetch([
+      bitrixRoute(writes),
+      openRouter(() => {
+        step++;
+        if (step === 1) return llmTools(["send_chat_message", { chatId: 55, text: "Нарада о 15:00" }]);
+        if (step === 2) return llmTools(["send_direct_message", { userId: 9, text: "Нарада о 15:00" }]);
+        return llmText("✅ Надіслано Олені Коваль");
+      }, seen),
+    ]);
+    const { env, jobs } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
+    await previewShown(env, "bitrix_agent", "📋 <b>Особисте повідомлення</b> → Олена Коваль\n<i>Нарада о 15:00</i>\nНадіслати? (так / змінити)");
+    await handleUpdate(env, { update_id: 1, message: { message_id: 1, date: 0, chat: { id: OWNER, type: "private" }, from: { id: OWNER, is_bot: false, first_name: "О" }, text: "так" } });
+    await runJobs(env, jobs);
+    expect(String(seen[1]!.messages.at(-1)!.content)).toContain("НЕ виконано");
+    expect(writes).toEqual([{ method: "im.message.add", body: { DIALOG_ID: "9", MESSAGE: "Нарада о 15:00" } }]);
   });
 });
 
@@ -393,9 +418,8 @@ describe("the task chat («Чат завдання») of new Bitrix24 task cards
   });
 });
 
-describe("Bitrix24 group chats: the bot writes only there, never to a person", () => {
-  it("finds group chats, sends to one; a private dialog or a person's ID is refused in code", async () => {
-    const { Bitrix } = await import("../src/bitrix/client");
+describe("Bitrix24 messages: a task, a group chat or one person — only where the approved preview said", () => {
+  const setup = () => {
     const sent: string[] = [];
     mockFetch([
       (url, init) => {
@@ -403,9 +427,19 @@ describe("Bitrix24 group chats: the bot writes only there, never to a person", (
         const method = url.pathname.split("/").at(-1)!.replace(/\.json$/, "");
         const body = JSON.parse(init.bodyText || "{}");
         if (method === "im.search.chat.list") {
-          return Response.json({ result: [{ id: 55, title: "Відділ продажів", type: "chat" }, { id: 66, title: "Іван Петренко", type: "private" }] });
+          return Response.json({
+            result: [
+              { id: 55, title: "Відділ продажів", type: "chat" },
+              { id: 66, title: "Іван Петренко", type: "private" },
+              { id: 77, title: "Задача: договір", type: "chat", entity_type: "TASKS" },
+            ],
+          });
         }
-        if (method === "im.dialog.get") return Response.json({ result: { type: body.DIALOG_ID === "chat66" ? "private" : "chat" } });
+        if (method === "im.dialog.get") {
+          const id = body.DIALOG_ID;
+          return Response.json({ result: id === "chat66" ? { type: "private" } : id === "chat77" ? { type: "chat", entity_type: "TASKS" } : { type: "chat", name: "Відділ продажів" } });
+        }
+        if (method === "user.get") return Response.json({ result: [{ ID: "9", NAME: "Олена", LAST_NAME: "Коваль", ACTIVE: true }] });
         if (method === "im.message.add") {
           sent.push(body.DIALOG_ID);
           return Response.json({ result: 901 });
@@ -414,13 +448,39 @@ describe("Bitrix24 group chats: the bot writes only there, never to a person", (
       },
     ]);
     const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
-    const tools = bitrixTools(env);
-    const find = tools.find((t) => t.spec.name === "find_chat")!;
-    expect(await find.run({ query: "продаж" })).toEqual({ chats: [{ id: 55, title: "Відділ продажів", type: "chat" }] });
-    const send = tools.find((t) => t.spec.name === "send_chat_message")!;
-    expect(await send.run({ chatId: 55, text: "Нарада о 15:00" })).toEqual({ ok: true, messageId: 901 });
-    await expect(send.run({ chatId: 66, text: "привіт" })).rejects.toThrow(/only to group chats/);
-    await expect(new Bitrix({ BITRIX_WEBHOOK_URL: WEBHOOK }).call("im.message.add", { DIALOG_ID: "7", MESSAGE: "x" })).rejects.toThrow(/only to group chats/);
-    expect(sent).toEqual(["chat55"]);
+    const tool = (preview: string | undefined, name: string) => bitrixTools(env, preview).find((t) => t.spec.name === name)!;
+    return { sent, tool };
+  };
+
+  it("finds group chats only — no personal dialogs, no task chats; sends where the preview said", async () => {
+    const { sent, tool } = setup();
+    expect(await tool(undefined, "find_chat").run({ query: "продаж" })).toEqual({ chats: [{ id: 55, title: "Відділ продажів", type: "chat" }] });
+    const chatPreview = "📋 <b>Повідомлення в чат</b> «Відділ продажів»\n<i>Нарада о 15:00</i>\nНадіслати?";
+    expect(await tool(chatPreview, "send_chat_message").run({ chatId: 55, text: "Нарада о 15:00" })).toEqual({ ok: true, messageId: 901 });
+    expect(await tool(chatPreview, "send_chat_message").run({ chatId: 77, text: "x" })).toMatchObject({ error: expect.stringContaining("не груповий чат") });
+    const dmPreview = "📋 <b>Особисте повідомлення</b> → Олена Коваль\n<i>Привіт</i>\nНадіслати?";
+    expect(await tool(dmPreview, "send_direct_message").run({ userId: 9, text: "Привіт" })).toMatchObject({ ok: true, to: "Олена Коваль" });
+    expect(sent).toEqual(["chat55", "9"]);
+  });
+
+  it("a preview for one place never lets a message go to another", async () => {
+    const { sent, tool } = setup();
+    const dmPreview = "📋 <b>Особисте повідомлення</b> → Олена Коваль\nНадіслати?";
+    const chatPreview = "📋 <b>Повідомлення в чат</b> «Відділ продажів»\nНадіслати?";
+    const commentPreview = "📋 <b>Коментар до задачі</b> «Договір»\nНадіслати?";
+    expect(await tool(dmPreview, "send_chat_message").run({ chatId: 55, text: "x" })).toMatchObject({ error: expect.stringContaining("НЕ виконано") });
+    expect(await tool(chatPreview, "send_direct_message").run({ userId: 9, text: "x" })).toMatchObject({ error: expect.stringContaining("НЕ виконано") });
+    expect(await tool(commentPreview, "send_direct_message").run({ userId: 9, text: "x" })).toMatchObject({ error: expect.stringContaining("НЕ виконано") });
+    expect(await tool(dmPreview, "add_comment").run({ taskId: 5, text: "x" })).toMatchObject({ error: expect.stringContaining("НЕ виконано") });
+    // The right kind of place but another chat or person.
+    expect(await tool("📋 <b>Повідомлення в чат</b> «Бухгалтерія»", "send_chat_message").run({ chatId: 55, text: "x" })).toMatchObject({ error: expect.any(String) });
+    expect(await tool("📋 <b>Особисте повідомлення</b> → Іван Петренко", "send_direct_message").run({ userId: 9, text: "x" })).toMatchObject({ error: expect.any(String) });
+    expect(sent).toEqual([]);
+  });
+
+  it("the client itself sends only to a chat or one person ID", async () => {
+    const { Bitrix } = await import("../src/bitrix/client");
+    setup();
+    await expect(new Bitrix({ BITRIX_WEBHOOK_URL: WEBHOOK }).call("im.message.add", { DIALOG_ID: "sg12", MESSAGE: "x" })).rejects.toThrow(/only to a chat or to one person/);
   });
 });

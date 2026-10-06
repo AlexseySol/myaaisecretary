@@ -111,6 +111,9 @@ export function phpQuery(value: unknown, prefix = ""): string {
   return parts.join("&");
 }
 
+/** A task's own chat (its discussion): written to only as a comment to the task. */
+const TASK_CHAT = /^TASKS?/i;
+
 let peopleCache: { at: number; list: Person[] } | null = null;
 let meCache: Person | null = null;
 const stagesCache = new Map<string, Record<string, string>>();
@@ -132,9 +135,9 @@ export class Bitrix {
   async call<T>(method: string, params: Record<string, unknown> = {}): Promise<{ result: T; next?: number; total?: number }> {
     // A hard lock whatever rights the webhook has: only these methods ever leave the bot.
     if (!BITRIX_ALLOWED.has(method)) throw new Error(`Bitrix24: method «${method}» is not allowed for the bot`);
-    // Messages go only to group chats (a task's chat included) — never to a person's private dialog.
-    if (method === "im.message.add" && !/^chat\d+$/.test(String(params.DIALOG_ID ?? ""))) {
-      throw new Error("Bitrix24: the bot writes only to group chats");
+    // A message goes to a chat (chat<N>) or to one person (their user ID) — nothing else.
+    if (method === "im.message.add" && !/^(chat)?\d+$/.test(String(params.DIALOG_ID ?? ""))) {
+      throw new Error("Bitrix24: a message goes only to a chat or to one person");
     }
     if (method === "batch") {
       const cmd = (params.cmd ?? {}) as Record<string, string>;
@@ -383,19 +386,33 @@ export class Bitrix {
     return result;
   }
 
-  /** Group chats the owner is in, by part of the name (never personal dialogs). */
+  /** Group chats the owner is in, by part of the name — not personal dialogs and not task chats (a task gets a comment). */
   async findChats(query: string): Promise<{ id: number; title: string; type: string }[]> {
     const { result } = await this.call<Record<string, unknown>[]>("im.search.chat.list", { FIND: query, LIMIT: 20 });
     return (Array.isArray(result) ? result : [])
+      .filter((c) => !TASK_CHAT.test(String(c.entity_type ?? c.ENTITY_TYPE ?? "")))
       .map((c) => ({ id: Number(c.id ?? c.ID), title: String(c.title ?? c.name ?? c.NAME ?? ""), type: String(c.type ?? c.TYPE ?? "") }))
       .filter((c) => c.id && c.type !== "private");
   }
 
-  /** A message to a group chat; a personal dialog is refused. */
+  /** A group chat's name; null for a personal dialog or a task's chat — those are not «a chat» for the bot. */
+  async groupChatName(chatId: number): Promise<string | null> {
+    const { result } = await this.call<{ type?: string; name?: string; entity_type?: string }>("im.dialog.get", { DIALOG_ID: `chat${chatId}` });
+    if (!result || result.type === "private" || TASK_CHAT.test(result.entity_type ?? "")) return null;
+    return result.name ?? "";
+  }
+
+  /** A message to a group chat. */
   async sendToChat(chatId: number, text: string): Promise<number> {
-    const { result: dialog } = await this.call<{ type?: string; name?: string }>("im.dialog.get", { DIALOG_ID: `chat${chatId}` });
-    if (!dialog || dialog.type === "private") throw new Error("Bitrix24: the bot writes only to group chats");
+    if ((await this.groupChatName(chatId)) === null) throw new Error("Bitrix24: this is not a group chat");
     const { result } = await this.call<number>("im.message.add", { DIALOG_ID: `chat${chatId}`, MESSAGE: text });
+    return result;
+  }
+
+  /** A personal message to one colleague, from the owner. */
+  async sendToPerson(userId: number, text: string): Promise<number> {
+    if (!Number.isInteger(userId) || userId <= 0) throw new Error("Bitrix24: no such person");
+    const { result } = await this.call<number>("im.message.add", { DIALOG_ID: String(userId), MESSAGE: text });
     return result;
   }
 
@@ -462,8 +479,8 @@ export function toPerson(u: Record<string, unknown>): Person {
 
 /**
  * Every Bitrix24 method the bot may call — whatever rights the webhook was given (even full access), the bot reads
- * tasks, people and task chats, writes a comment, creates a task and writes to a group chat; it can never close, change,
- * delegate or delete a task, write to a person's private dialog, or touch CRM, files, users or settings. Writes run only after the owner's «так» to a
+ * tasks, people and task chats, writes a comment, creates a task, writes to a group chat or to one colleague; it can
+ * never close, change, delegate or delete a task, or touch CRM, files, users or settings. Writes run only after the owner's «так» to a
  * preview (agent/index.ts NEEDS_YES).
  */
 export const BITRIX_READ = new Set([
@@ -485,7 +502,7 @@ const BITRIX_WRITE = new Set(["task.commentitem.add", "im.message.add", "tasks.t
 export const BITRIX_NEEDED = [
   { scope: "task", name: "Задачі", why: "читати й ставити задачі" },
   { scope: "user", name: "Користувачі", why: "знаходити людей та їхні email" },
-  { scope: "im", name: "Чат і повідомлення", why: "читати «Чат завдання» й писати в групові чати" },
+  { scope: "im", name: "Чат і повідомлення", why: "читати «Чат завдання», писати в чати й особисті" },
 ] as const;
 
 export function missingScopes(have: string[]): (typeof BITRIX_NEEDED)[number][] {

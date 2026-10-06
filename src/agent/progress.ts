@@ -38,6 +38,7 @@ const LABELS: [RegExp, string][] = [
   [/^(list_tasks|get_task|task_)/, "📋 Дивлюся задачі"],
   [/^(create_task|add_comment)/, "📋 Пишу в Bitrix24"],
   [/^send_chat_message$/, "💬 Пишу в чат Bitrix24"],
+  [/^send_direct_message$/, "💬 Пишу особисте в Bitrix24"],
   [/^find_chat$/, "🔎 Шукаю чат"],
   [/^(remember|forget)_fact$/, "🧠 Запамʼятовую"],
   [/^find_person$|^find_user$/, "🔎 Шукаю людину"],

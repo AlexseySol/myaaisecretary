@@ -98,7 +98,29 @@ export async function taskStats(bx: Bitrix, now = Date.now()): Promise<Record<st
   };
 }
 
-export function bitrixTools(env: Env): Tool[] {
+/** Text compared loosely: no tags, one case, one apostrophe, single spaces. */
+const plain = (t: string) =>
+  t
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[ʼ’'`]/g, "'")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+/**
+ * The owner said «так» to a preview: a message goes only where that preview said — a task comment only after
+ * «Коментар до задачі», a chat only after «Повідомлення в чат» naming that chat, a person only after «Особисте
+ * повідомлення» naming that person. A mix-up is refused here, in code, whatever the model does.
+ */
+export function previewMismatch(preview: string | undefined, header: string, names: string[]): string | null {
+  if (preview === undefined) return null;
+  const p = plain(preview);
+  const named = names.map(plain).filter((n) => n.trim());
+  if (p.includes(plain(header)) && (!named.length || named.some((n) => p.includes(n)))) return null;
+  const where = named.length ? `«${header}» з назвою «${names.find((n) => n.trim())}»` : `«${header}»`;
+  return `НЕ виконано: власник підтвердив превʼю не про це місце. Покажи нове превʼю, що починається з «📋 ${where}», і дочекайся «так».`;
+}
+
+export function bitrixTools(env: Env, preview?: string): Tool[] {
   const bx = new Bitrix(env);
   return [
     {
@@ -216,13 +238,15 @@ export function bitrixTools(env: Env): Tool[] {
         parameters: object({ taskId: { type: "integer" }, text: s("Comment text") }, ["taskId", "text"]),
       },
       async run(a) {
+        const wrong = previewMismatch(preview, "Коментар до задачі", []);
+        if (wrong) return { error: wrong };
         return { ok: true, commentId: await bx.addComment(Number(a.taskId), str(a, "text")) };
       },
     },
     {
       spec: {
         name: "find_chat",
-        description: "Find a Bitrix24 GROUP chat the owner is in, by part of its name. Personal dialogs are never returned.",
+        description: "Find a Bitrix24 GROUP chat the owner is in, by part of its name. Personal dialogs and task chats are not returned (a person — find_user + send_direct_message; a task — add_comment).",
         parameters: object({ query: s("Part of the chat name, as the owner said it") }, ["query"]),
       },
       async run(a) {
@@ -233,11 +257,29 @@ export function bitrixTools(env: Env): Tool[] {
     {
       spec: {
         name: "send_chat_message",
-        description: "Send a message to a Bitrix24 GROUP chat (chatId from find_chat), from the owner. Only after the owner confirmed the preview. Personal messages to people are impossible.",
+        description: "Send a message to a Bitrix24 GROUP chat (chatId from find_chat), from the owner. Only after the owner confirmed the preview «📋 Повідомлення в чат «<chat name>»». Not for a task (add_comment) and not for one person (send_direct_message).",
         parameters: object({ chatId: { type: "integer" }, text: s("Message text") }, ["chatId", "text"]),
       },
       async run(a) {
+        const name = await bx.groupChatName(Number(a.chatId));
+        if (name === null) return { error: "Це не груповий чат. Задачі — add_comment, одній людині — send_direct_message." };
+        const wrong = previewMismatch(preview, "Повідомлення в чат", [name]);
+        if (wrong) return { error: wrong };
         return { ok: true, messageId: await bx.sendToChat(Number(a.chatId), str(a, "text")) };
+      },
+    },
+    {
+      spec: {
+        name: "send_direct_message",
+        description: "Send a PERSONAL message in Bitrix24 to one colleague (userId from find_user), from the owner. Only after the owner confirmed the preview «📋 Особисте повідомлення → <Імʼя Прізвище>». Not for a task or a group chat.",
+        parameters: object({ userId: { type: "integer" }, text: s("Message text") }, ["userId", "text"]),
+      },
+      async run(a) {
+        const person = (await bx.people()).find((p) => p.id === Number(a.userId));
+        if (!person) return { error: "Такого співробітника не знайдено — спершу find_user." };
+        const wrong = previewMismatch(preview, "Особисте повідомлення", [fullName(person), person.lastName]);
+        if (wrong) return { error: wrong };
+        return { ok: true, to: fullName(person), messageId: await bx.sendToPerson(person.id, str(a, "text")) };
       },
     },
     {

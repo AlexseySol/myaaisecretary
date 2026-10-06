@@ -83,6 +83,8 @@ export interface RunContext {
   progress?: Progress;
   /** The owner just said «так» to the bot's preview: actions that change things may run (NEEDS_YES). */
   approved?: boolean;
+  /** That preview's text: a message to someone goes only where the preview said (bitrixTools). */
+  preview?: string;
 }
 
 /** One tool call done: which agent, which tool, short arguments and result. */
@@ -138,6 +140,7 @@ export const NEEDS_YES = new Set([
   "label_delete",
   "add_comment",
   "send_chat_message",
+  "send_direct_message",
   "create_task",
   "sheets_append",
   "sheets_update",
@@ -279,7 +282,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       system: bitrixPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock(),
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
-      tools: guarded([...bitrixTools(env), ...memoryTools], ctx.approved === true),
+      tools: guarded([...bitrixTools(env, ctx.preview), ...memoryTools], ctx.approved === true),
       maxIterations: 12,
     });
     return answer;
@@ -464,8 +467,10 @@ export async function runWithFallback(
 ): Promise<AgentResult> {
   const start = opts.startedAt ?? Date.now();
   const yes = approved(input.text, lastBotTurn()?.text, input.replyText);
+  const preview = yes ? (input.replyText?.includes(PREVIEW_MARK) ? input.replyText : lastBotTurn()?.text) : undefined;
   const timed = (model: string): RunContext => ({
     approved: yes,
+    preview,
     model,
     wrote: false,
     deadline: start + STEP_UNTIL_MS,
