@@ -53,22 +53,12 @@
 
 ## Запуск
 
-Два кроки, без токенів і налаштувань:
+1. **[Створити копію ↗](https://github.com/new?template_name=aisecretary&template_owner=Mem341)** → **Public** → **Create repository**.
+2. **[Vercel → Import ↗](https://vercel.com/new)** → ця копія → `TELEGRAM_BOT_TOKEN`, `OWNER_TELEGRAM_ID`, `OPENROUTER_API_KEY` → **Deploy**.
+3. Відкрийте `https://<адреса>/api/setup` і напишіть боту `/start`.
 
-1. **[Створити свою копію ↗](https://github.com/new?template_name=aisecretary&template_owner=Mem341)** — GitHub зробить копію з усім, що потрібно для автооновлення. Оберіть
-   **Public** → **Create repository**. (У приватній копії безкоштовних хвилин GitHub на часті перевірки не вистачить.)
-2. **[Імпортувати у Vercel ↗](https://vercel.com/new)** → оберіть цю копію → вкажіть `TELEGRAM_BOT_TOKEN`,
-   `OWNER_TELEGRAM_ID`, `OPENROUTER_API_KEY` → **Deploy** → відкрийте `https://<адреса>/api/setup`.
-
-Далі копія сама бере нові версії кожні 5 хвилин, Vercel їх збирає, а бот пише «🆕 Бот оновлено». Не використовуйте
-Fork (у ньому GitHub вимикає автооновлення) і кнопку «Deploy» Vercel (вона копіює без файлів автооновлення).
-
-Vercel позначить `TELEGRAM_BOT_TOKEN` і `OPENROUTER_API_KEY` як «Потребує уваги» — це лише порада сховати ключі. Щоб прибрати:
-Project → **Settings → Environment Variables** → у кожного ключа **⋯ → Delete**, потім **Add New** з тим самим іменем і
-значенням та ввімкненим **Sensitive** → **Save** → **Deployments → ⋯ → Redeploy**. Бот працює й без цього.
-
-Потрібні три речі — токен бота, ваш Telegram ID і ключ OpenRouter. Google підключається потім у самому боті:
-напишіть йому `/start`. Де взяти кожну річ (і все необовʼязкове) — **[docs/what-you-need.md](docs/what-you-need.md)**.
+Бот оновлюється сам: копія бере кожну нову версію звідси, Vercel її збирає. Де взяти три значення —
+[docs/what-you-need.md](docs/what-you-need.md).
 
 🎥 Відео-інструкції: [Telegram](https://drive.google.com/file/d/1YJVHDBX5czzyU7kQ6S38jnNlzopAKCW3/view) ·
 [Google](https://drive.google.com/file/d/1o1UOKdoZSm1j-d3cSjSd4-tVVB0HjeGh/view) ·
