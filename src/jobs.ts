@@ -2,6 +2,7 @@ import { type AgentInput, handleWithAgents } from "./agent";
 import type { Continuation } from "./agent/continue";
 import { type BitrixAction, runBitrixAction } from "./bitrix/menu";
 import { helpText, mainMenu } from "./bot/onboarding";
+import { syncFork } from "./forkSync";
 import { type Env, gmailPushConfigured } from "./env";
 import { gmailSync } from "./google/gmailPush";
 import { reportWake, setupGoogleWake } from "./google/wake";
@@ -52,6 +53,8 @@ export type Job = (
   | { type: "digest"; chatId: number }
   /** After a new version is deployed: tell the owner what is new (bot/news.ts). */
   | { type: "news" }
+  /** GitHub's «Sync fork» for this copy (forkSync.ts). */
+  | { type: "fork_sync" }
   /** A /bitrix menu button: task list, analytics or the Excel report. */
   | { type: "bitrix"; chatId: number; action: BitrixAction }
 ) & {
@@ -210,6 +213,11 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       // After an update with notes: the sheet is made at once and the owner is told where it is.
       await ensureNotesSheet(env).catch((err) => logError(env, "notes", err));
       return;
+    case "fork_sync": {
+      const result = await syncFork(env);
+      console.log(`[fork.sync] ${env.GITHUB_REPO}: ${result}`);
+      return;
+    }
     case "digest":
       return withTyping(env, job.chatId, async () => {
         if (!(await sendDigest(env, Date.now(), job.chatId, true))) await new Telegram(env).send(job.chatId, "Немає даних для звіту.");

@@ -45,6 +45,8 @@ export const testConfig: Config = {
   DEFAULT_DURATION_MIN: 60,
   DEFAULT_FORMAT: "offline",
   DEFAULT_ADDRESS: "вул. Хрещатик, 1, Київ",
+  GITHUB_TOKEN: "",
+  GITHUB_REPO: "",
 };
 
 /** Every test starts from a fresh instance: nothing survives between tests, as between cold starts. */

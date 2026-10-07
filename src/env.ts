@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { forkRepo } from "./forkSync";
 import type { Job } from "./jobs";
 
 /**
@@ -62,6 +63,10 @@ export interface Config {
   DEFAULT_DURATION_MIN: number;
   DEFAULT_FORMAT: "offline" | "google_meet" | "zoom";
   DEFAULT_ADDRESS: string;
+  /** The owner's GitHub token for their fork (Contents + Workflows: write): the bot keeps the fork updated; "" = off. */
+  GITHUB_TOKEN: string;
+  /** The fork («owner/repo»); defaults to the Git source Vercel deployed from. */
+  GITHUB_REPO: string;
 }
 
 export interface JobQueue {
@@ -145,6 +150,8 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     DEFAULT_DURATION_MIN: durationVal(val("DEFAULT_DURATION_MIN")),
     DEFAULT_FORMAT: formatVal(val("DEFAULT_FORMAT")),
     DEFAULT_ADDRESS: val("DEFAULT_ADDRESS"),
+    GITHUB_TOKEN: val("GITHUB_TOKEN"),
+    GITHUB_REPO: forkRepo(val),
   };
 }
 

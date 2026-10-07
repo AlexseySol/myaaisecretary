@@ -73,6 +73,8 @@ async function nudgeReminders(env: Env): Promise<void> {
  */
 async function checkNews(env: Env): Promise<void> {
   if (firstTime("news", 6 * 3600_000)) await env.jobs.send({ type: "news" }).catch(() => undefined);
+  // The same wake-ups keep the owner's fork updated, when they gave a GitHub token (forkSync.ts).
+  if (env.GITHUB_TOKEN && firstTime("fork-sync", 15 * 60_000)) await env.jobs.send({ type: "fork_sync" }).catch(() => undefined);
 }
 
 /** POST /api/telegram — Telegram webhook. Answers at once; the update is handled in the background. */
@@ -218,6 +220,7 @@ export async function dailyCron(req: Request, env: Env): Promise<Response> {
   // The report first and on its own, so the slower renewals cannot hold it up.
   await env.jobs.send({ type: "morning" });
   await env.jobs.send({ type: "daily" });
+  if (env.GITHUB_TOKEN) await env.jobs.send({ type: "fork_sync" });
   return Response.json({ ok: true });
 }
 
@@ -271,6 +274,8 @@ export async function healthCheck(_req: Request, env: Env): Promise<Response> {
   // Which code is live: CI waits for its own commit here before waking the bot after a deploy.
   checks.commit = process.env.VERCEL_GIT_COMMIT_SHA ?? null;
   checks.release = CURRENT_VERSION;
+  // Whether the bot keeps its fork updated itself (a GitHub token is set) and which fork.
+  checks.auto_update = env.GITHUB_TOKEN ? env.GITHUB_REPO || "no repo" : false;
   const ok = checks.telegram_webhook === true;
   return Response.json({ ok, ...checks }, { status: ok ? 200 : 503 });
 }

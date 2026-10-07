@@ -149,3 +149,12 @@ GitHub вимикає Actions у кожному новому форку — од
 them → Sync from upstream → Enable workflow**. Оновити одразу: **Actions → Sync from upstream → Run workflow**.
 Не змінюйте код у форку: власні зміни можуть зламати оновлення. Якщо оригінал змінить файли в `.github/workflows`,
 решта оновиться сама, а ці файли — після одного натискання **Sync fork → Update branch** на сторінці форку.
+
+**Надійно й одразу — ключ GitHub (1 хвилина, один раз).** Розклад GitHub у форках запускається із запізненням або
+зовсім не запускається. З ключем форк оновлює сам бот (не частіше ніж раз на 15 хвилин, коли прокидається):
+1. <https://github.com/settings/personal-access-tokens/new> (у своєму акаунті GitHub, де форк).
+2. **Repository access → Only select repositories** → свій форк `aisecretary`.
+3. **Permissions → Contents: Read and write** і **Workflows: Read and write** → **Generate token**.
+4. Vercel → проєкт → **Settings → Environment Variables** → `GITHUB_TOKEN` = ключ → **Redeploy**.
+
+Ключ лишається тільки у вашому Vercel, нікому його не надсилайте.

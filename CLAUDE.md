@@ -169,7 +169,11 @@ webhook and redirects to the bot; `/api/health` shows the state.
   original as `upstream`, and once the original commit's `test` check passed merges `upstream/main` into the fork's
   `main` and pushes with the job's own token — no token, no secret; keep it that way. That token cannot write
   `.github/workflows`: then the rest is merged and the fork's `.github` kept, the log asks for one «Sync fork». GitHub
-  keeps Actions (and schedules) off in a new fork — the owner enables them once (README). Owners change nothing in code;
+  keeps Actions (and schedules) off in a new fork — the owner enables them once (README). A fork's schedule is late or silent, so the
+  reliable path is the owner's own GitHub token for their fork in Vercel's `GITHUB_TOKEN` (`forkSync.ts`): the bot's
+  wake-ups (`checkNews`, at most every 15 min per instance) and the daily cron run the `fork_sync` job — the original's
+  tested main via GitHub's merge-upstream («Sync fork»); the fork is `GITHUB_REPO` or Vercel's
+  `VERCEL_GIT_REPO_OWNER/SLUG`; never a token in code, never one token for everyone. Owners change nothing in code;
   every personal setting is an env variable (`.env.example`, e.g. `TIMEZONE`) or a bot setting.
   `.github/workflows/wake.yml` opens the bot's `/api/setup` the moment Vercel reports a successful production deploy
   (`deployment_status`), so «🆕 Бот оновлено» comes at once: it derives the production address from the deploy's own
