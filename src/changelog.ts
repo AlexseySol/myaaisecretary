@@ -18,6 +18,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    v: 44,
+    date: "2026-10-07",
+    changed: ["🧪 Тест: форк сам взяв нову версію, а Vercel її розгорнув"],
+  },
+  {
     v: 43,
     date: "2026-10-07",
     added: ["🕐 Часовий пояс задається змінною TIMEZONE у Vercel (за замовчуванням Europe/Kyiv)"],
