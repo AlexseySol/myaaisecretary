@@ -1,39 +1,60 @@
-name: Update the copies
+name: Sync from upstream
 
-# The source repository is private: copies cannot fetch it, so it pushes to them. After the tests of a new main pass
-# (and once a day, for copies connected since), .github/scripts/sync-copies.mjs writes main into every copy whose owner
-# installed the GitHub App «Mem341 Bot Updater» on it and has access to this repository. Runs only here, never in a copy.
-# Secrets: UPDATER_APP_ID, UPDATER_APP_PRIVATE_KEY.
+# Runs only in a fork of Mem341/aisecretary: every 30 minutes (and on «Run workflow») it takes the new main of the
+# original once its tests have passed, merges it into this fork's main and pushes. Vercel, connected to the fork,
+# deploys every push by itself, and the bot then says «🆕 Бот оновлено». No token, no secret: the job's own token.
+#
+# A fork's own Actions are off until its owner turns them on (Actions → «I understand my workflows…», then this
+# workflow → «Enable workflow»). The job's token may not change files in .github/workflows: when the original changes
+# them, the rest is still updated and the log asks the owner to press «Sync fork» once.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   schedule:
-    - cron: "17 5 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
-  contents: read
-  checks: read
+  contents: write
 
-concurrency: sync-copies
+concurrency: sync-from-upstream
 
 jobs:
   sync:
-    if: github.repository == 'RibasTeam/aisecretary' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    if: github.repository != 'Mem341/aisecretary'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Push main to the allowed copies
+          ref: main
+          fetch-depth: 0
+      - name: Merge the original's main
         env:
-          UPDATER_APP_ID: ${{ secrets.UPDATER_APP_ID }}
-          UPDATER_APP_PRIVATE_KEY: ${{ secrets.UPDATER_APP_PRIVATE_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REPO: ${{ github.repository }}
-        run: node .github/scripts/sync-copies.mjs
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/Mem341/aisecretary.git
+          git fetch upstream main
+          sha=$(git rev-parse upstream/main)
+          if git merge-base --is-ancestor "$sha" HEAD; then echo "Up to date with ${sha:0:7}"; exit 0; fi
+
+          # Only a version whose tests passed in the original.
+          runs=$(curl -fsS -H "authorization: Bearer $GH_TOKEN" -H "accept: application/vnd.github+json" \
+            "https://api.github.com/repos/Mem341/aisecretary/commits/$sha/check-runs?check_name=test&per_page=100") \
+            || { echo "GitHub did not answer — next time"; exit 0; }
+          if ! echo "$runs" | jq -e '(.check_runs | length > 0) and all(.check_runs[]; .status == "completed" and .conclusion == "success")' > /dev/null; then
+            echo "The tests of ${sha:0:7} have not passed yet — next time"; exit 0
+          fi
+
+          git merge --no-edit upstream/main || {
+            echo "::error::The fork's own changes conflict with the original — undo them or press «Sync fork → Discard commits»"
+            git merge --abort; exit 1; }
+          if git push origin HEAD:main; then echo "Updated to ${sha:0:7}"; exit 0; fi
+
+          # The job's token cannot write workflow files: update everything else, keep this fork's .github.
+          git reset -q --hard origin/main
+          git merge --no-commit --no-ff upstream/main || true
+          git rm -rqf --ignore-unmatch .github && git checkout origin/main -- .github
+          git commit -qm "Sync from Mem341/aisecretary ${sha:0:7} (workflows: press «Sync fork» once)" || true
+          git push origin HEAD:main
+          echo "::warning::Updated to ${sha:0:7}, except .github/workflows — press «Sync fork → Update branch» once to take those too"

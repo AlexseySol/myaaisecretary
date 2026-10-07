@@ -140,19 +140,12 @@ Drive. Голосові розпізнає той самий OpenRouter.
 
 ## Оновлення: бот оновлюється сам
 
-Основний спосіб: власник репозиторію розгортає бота у ваш Vercel. Ви даєте йому токен Vercel
-(<https://vercel.com/account/tokens>, без терміну дії) і назву проєкту, він додає рядок у секрет `VERCEL_DEPLOY`.
-Після кожного успішного оновлення коду CI сам завантажує нову версію у ваш проєкт і будить бота — він одразу пише
-«🆕 Бот оновлено». Три значення (`TELEGRAM_BOT_TOKEN`, `OWNER_TELEGRAM_ID`, `OPENROUTER_API_KEY`) ви вписуєте самі у
-Vercel → проєкт → **Settings → Environment Variables**, потім **Deployments → ⋯ → Redeploy**. Вимкнути оновлення —
-видалити токен.
+Ваш бот — це форк github.com/Mem341/aisecretary, підключений до Vercel. У форку працює
+`.github/workflows/sync.yml`: кожні 30 хвилин він бере нову версію з оригіналу (лише коли її перевірки пройшли),
+зливає у ваш `main`, Vercel її розгортає, бот пише «🆕 Бот оновлено». Ключі (у Vercel) і налаштування (у Telegram)
+не змінюються.
 
-Запасний спосіб — власна приватна копія (потрібен доступ до RibasTeam/aisecretary): з шаблону
-(<https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш **особистий** акаунт → **Private**),
-застосунок **[Mem341 Bot Updater](https://github.com/apps/mem341-bot-updater/installations/new)** лише на цю копію, потім
-**Import** на <https://vercel.com/new>. Нова версія записується в копію окремим комітом, Vercel її збирає. Кнопка Vercel
-«Deploy» (clone) з приватним кодом не працює.
-
-Для власника: секрет `VERCEL_DEPLOY` у цьому репозиторії, рядок на кожного бота —
-`токен-Vercel назва-проєкту [адреса-бота]`; після кожного оновлення CI завантажує код у кожен проєкт (новий створює сам) і
-будить бота. Новий рядок — одразу: **Actions → CI → Run workflow**.
+GitHub вимикає Actions у кожному новому форку — один раз: **Actions → I understand my workflows, go ahead and enable
+them → Sync from upstream → Enable workflow**. Оновити одразу: **Actions → Sync from upstream → Run workflow**.
+Не змінюйте код у форку: власні зміни можуть зламати оновлення. Якщо оригінал змінить файли в `.github/workflows`,
+решта оновиться сама, а ці файли — після одного натискання **Sync fork → Update branch** на сторінці форку.

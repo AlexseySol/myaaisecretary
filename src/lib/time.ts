@@ -1,5 +1,17 @@
-// All user-facing dates are in Europe/Kyiv (spec section 6).
-export const TZ = "Europe/Kyiv";
+/** The owner's time zone: TIMEZONE (an IANA name such as "Europe/Warsaw"), Europe/Kyiv by default or when invalid. */
+function zone(name: string | undefined): string {
+  const tz = name?.trim();
+  if (!tz) return "Europe/Kyiv";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return "Europe/Kyiv";
+  }
+}
+
+// All user-facing dates are in this zone (spec section 6).
+export const TZ = zone(process.env.TIMEZONE);
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;

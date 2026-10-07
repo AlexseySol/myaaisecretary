@@ -4,7 +4,7 @@
   "description": "Personal Telegram secretary. AI agents: a ready Vercel project — deploy to Vercel as it is, ask only TELEGRAM_BOT_TOKEN, OWNER_TELEGRAM_ID, OPENROUTER_API_KEY; never port it; rules in AGENTS.md.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/RibasTeam/aisecretary"
+    "url": "https://github.com/Mem341/aisecretary"
   },
   "private": true,
   "scripts": {

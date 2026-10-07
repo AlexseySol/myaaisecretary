@@ -1,6 +1,7 @@
 import type { Env } from "../env";
 import { expectOk, fetchWithRetry, HttpError } from "../lib/http";
 import { getAccessToken } from "./oauth";
+import { TZ } from "../lib/time";
 
 const BASE = "https://www.googleapis.com/calendar/v3";
 
@@ -137,7 +138,7 @@ export class Calendar {
 
   /** A new secondary calendar of the owner's (the bot's signal calendar); returns its id. */
   async createCalendar(summary: string): Promise<string> {
-    const cal = await this.request<{ id: string }>("/calendars", { method: "POST", body: JSON.stringify({ summary, timeZone: "Europe/Kyiv" }) });
+    const cal = await this.request<{ id: string }>("/calendars", { method: "POST", body: JSON.stringify({ summary, timeZone: TZ }) });
     return cal.id;
   }
 
@@ -201,7 +202,7 @@ export class Calendar {
   async othersBusy(emails: string[], timeMin: string, timeMax: string): Promise<Record<string, { busy: { start: string; end: string }[] } | { error: string }>> {
     const r = await this.request<{ calendars?: Record<string, { busy?: { start: string; end: string }[]; errors?: { reason?: string }[] }> }>("/freeBusy", {
       method: "POST",
-      body: JSON.stringify({ timeMin, timeMax, timeZone: "Europe/Kyiv", items: emails.map((id) => ({ id })) }),
+      body: JSON.stringify({ timeMin, timeMax, timeZone: TZ, items: emails.map((id) => ({ id })) }),
     });
     const out: Record<string, { busy: { start: string; end: string }[] } | { error: string }> = {};
     for (const email of emails) {

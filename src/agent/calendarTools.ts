@@ -2,7 +2,7 @@ import { type Env, zoomConfigured } from "../env";
 import { Calendar, type GEvent } from "../google/calendar";
 import { PROP_BOT_CANCEL, PROP_DRAFT, PROP_START } from "../google/sync";
 import { randomId } from "../lib/crypto";
-import { DAY, formatTime, kyivLocalToDate, kyivParts, MINUTE } from "../lib/time";
+import { DAY, formatTime, kyivLocalToDate, kyivParts, MINUTE, TZ } from "../lib/time";
 import { mark } from "../session";
 import { createZoomMeeting } from "../zoom/client";
 import { str, type Tool } from "./runner";
@@ -13,7 +13,7 @@ import { str, type Tool } from "./runner";
  * Telegram" notices never echo the bot's own changes.
  */
 
-const ISO = "ISO 8601 with Europe/Kyiv offset, e.g. 2026-10-01T14:00:00+03:00";
+const ISO = `ISO 8601 with the ${TZ} offset, e.g. 2026-10-01T14:00:00+03:00`;
 
 /** n8n passes attendees as comma-separated JSON objects ({"email":"a@x"},{"email":"b@y"}); plain lists work too. */
 export function parseAttendees(value: unknown): { email: string; displayName?: string; responseStatus?: string }[] {
@@ -125,8 +125,8 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
     const end = str(a, "endDateTime") || new Date(startMs + 60 * 60_000).toISOString();
     return {
       summary: str(a, "summary"),
-      start: { dateTime: start, timeZone: "Europe/Kyiv" },
-      end: { dateTime: end, timeZone: "Europe/Kyiv" },
+      start: { dateTime: start, timeZone: TZ },
+      end: { dateTime: end, timeZone: TZ },
       attendees: parseAttendees(a.attendeesJson ?? a.attendees),
       guestsCanModify: false,
       guestsCanInviteOthers: true,
@@ -339,8 +339,8 @@ export function calendarTools(env: Env, ownerEmail: string | null, opts: { curre
         const start = str(a, "newStartDateTime");
         return brief(
           await cal.patchEvent(id, {
-            start: { dateTime: start, timeZone: "Europe/Kyiv" },
-            end: { dateTime: str(a, "newEndDateTime"), timeZone: "Europe/Kyiv" },
+            start: { dateTime: start, timeZone: TZ },
+            end: { dateTime: str(a, "newEndDateTime"), timeZone: TZ },
             extendedProperties: { private: { ...(current.extendedProperties?.private ?? {}), [PROP_START]: String(Date.parse(start)) } },
           }),
         );

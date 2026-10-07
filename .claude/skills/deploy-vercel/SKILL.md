@@ -14,7 +14,7 @@ else yourself.
 - **`AGENTS.md` in the repo root is binding.** The project is finished and runs on Vercel as it is. Never port it
   or propose services, databases or frameworks. Never ask technical questions or for plan approval.
 - **The current code has `vercel.json` at its root.** A copy without it (or with only a few commits) is an old
-  snapshot: read `main` of github.com/RibasTeam/aisecretary again; never describe or port the old one.
+  snapshot: read `main` of github.com/Mem341/aisecretary again; never describe or port the old one.
 - **First ask for the three values of Step 1 in one message, then deploy.** Google is not needed for the deploy: the
   owner connects it later in the bot (it asks for the Google client file itself).
 - **Talk in the user's language.**
@@ -36,8 +36,7 @@ else yourself.
 
 In a chat without a terminal, or when your sandbox cannot reach api.telegram.org / github.com: do not clone, do not
 ask for network or «Capabilities» settings, a Vercel token or GitHub, do not create an empty project. Give the user
-these steps (the source is private, so Vercel's clone button does not work with it — never give it) and stop:
-«1) <https://vercel.com/account/tokens> → Create (без срока) → отправить владельцу RibasTeam/aisecretary токен и название проекта; 2) владелец добавляет строку в секрет `VERCEL_DEPLOY` и запускает CI; 3) Vercel → проект → Settings → Environment Variables → 3 значения → Redeploy; 4) открыть https://<проект>.vercel.app/api/setup» (с доступом к RibasTeam можно и так: «1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup»).
+these steps and stop: «1) <https://github.com/Mem341/aisecretary> → **Fork** → Create fork; 2) в форке **Actions** → «I understand my workflows, go ahead and enable them» → слева **Sync from upstream** → **Enable workflow**; 3) <https://vercel.com/new> → **Import** форка → 3 значения в Environment Variables → Deploy; 4) открыть https://<проект>.vercel.app/api/setup; в коде форка ничего не менять».
 
 ## Step 1 — collect the inputs
 
@@ -63,14 +62,12 @@ If a check fails: say which item is wrong and why, and ask for that item only.
 
 ## Step 3 — project, variables, deploy
 
-1. **Project — the user's own PRIVATE GitHub copy, connected to Vercel.** That is what makes the bot update itself:
-   the source github.com/RibasTeam/aisecretary is private (the user must accept the invitation to RibasTeam), and after
-   every green CI it writes the new `main` into each copy where the GitHub App «Mem341 Bot Updater» is installed;
-   Vercel builds every push. No token or secret for the user.
-   - Simplest: «1) <https://vercel.com/account/tokens> → Create (без срока) → отправить владельцу RibasTeam/aisecretary токен и название проекта; 2) владелец добавляет строку в секрет `VERCEL_DEPLOY` и запускает CI; 3) Vercel → проект → Settings → Environment Variables → 3 значения → Redeploy; 4) открыть https://<проект>.vercel.app/api/setup» (с доступом к RibasTeam можно и так: «1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup») (Vercel preset **Other**, no build command, root `/`). Not a fork and not Vercel's clone
-     button (it works only with public code).
-   - With `gh`/GitHub access: create the PRIVATE copy in the user's account from the template, install the App on it, then
-     import it in Vercel (`npx vercel link` + `npx vercel git connect`).
+1. **Project — the user's FORK of github.com/Mem341/aisecretary, imported into Vercel.** That is what makes the bot
+   update itself: the fork's `.github/workflows/sync.yml` merges the original's tested `main` every 30 minutes; Vercel
+   builds every push. GitHub keeps Actions off in a fork — the user turns them on once. No token or secret.
+   - Steps for the user: «1) <https://github.com/Mem341/aisecretary> → **Fork** → Create fork; 2) в форке **Actions** → «I understand my workflows, go ahead and enable them» → слева **Sync from upstream** → **Enable workflow**; 3) <https://vercel.com/new> → **Import** форка → 3 значения в Environment Variables → Deploy; 4) открыть https://<проект>.vercel.app/api/setup; в коде форка ничего не менять» (Vercel preset **Other**, no build command, root `/`).
+   - With `gh`/GitHub access as the user: fork it, then import the fork in Vercel (`npx vercel link` +
+     `npx vercel git connect`); enabling Actions in the fork is the user's own click.
    - No GitHub possible (`repo_no_access`, no account)? Do not ask. Deploy from files — the bot works but does not
      update itself; put that in the report: `npx vercel link --yes --project ai-secretary`, the variables,
      `npx vercel deploy --prod --yes`. Ask for a Vercel token only if the CLI is not logged in.

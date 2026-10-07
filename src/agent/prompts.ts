@@ -1,6 +1,6 @@
 import type { DirectoryEntry } from "../bot/contacts";
 import type { User } from "../bot/owner";
-import { kyivOffsetMinutes, kyivParts, toKyivDate } from "../lib/time";
+import { kyivOffsetMinutes, kyivParts, toKyivDate, TZ } from "../lib/time";
 
 /**
  * The system prompts of the n8n flows ("AI Agent ALL" → Supervisor, "Calendar Agent", "Gmail Agent"), kept as
@@ -91,10 +91,10 @@ export function calendarPrompt(owner: User, directory: DirectoryEntry[], now: Da
 ## КОРИСТУВАЧ
 Ім'я: ${name}
 Email: ${email}
-Таймзона: Europe/Kyiv
+Таймзона: ${TZ}
 
 ## ЧАС
-Зараз: ${toKyivDate(now)} (${WEEKDAYS[kyivParts(now).weekday]}), ${clock(now)} Europe/Kyiv
+Зараз: ${toKyivDate(now)} (${WEEKDAYS[kyivParts(now).weekday]}), ${clock(now)} ${TZ}
 DST offset: ${off}
 
 ## ПОШТА
@@ -197,7 +197,7 @@ DST offset: ${off}
 ${contacts}
 
 ## ПАРСИНГ ДАТИ/ЧАСУ
-Таймзона завжди Europe/Kyiv. Offset: ${off}
+Таймзона завжди ${TZ}. Offset: ${off}
 - "завтра" → ${plusDays(now, 1)}
 - "післязавтра" → ${plusDays(now, 2)}
 - "наступного понеділка" → найближчий понеділок від сьогодні
@@ -364,7 +364,7 @@ export function bitrixPrompt(owner: User, now: Date): string {
 Ти — агент задач Bitrix24 для ${name}. Працюєш із задачами, чатами й особистими повідомленнями.
 
 ## ЧАС
-Зараз: ${toKyivDate(now)} (${WEEKDAYS[kyivParts(now).weekday]}), ${clock(now)} Europe/Kyiv, offset ${off}
+Зараз: ${toKyivDate(now)} (${WEEKDAYS[kyivParts(now).weekday]}), ${clock(now)} ${TZ}, offset ${off}
 - "завтра" → ${plusDays(now, 1)}, "післязавтра" → ${plusDays(now, 2)}
 - "до пʼятниці" → найближча пʼятниця 18:00; "до кінця дня" → сьогодні 18:00
 ISO формат дедлайну: yyyy-MM-ddTHH:mm:ss${off}
@@ -476,7 +476,7 @@ export function docsPrompt(owner: User, now: Date): string {
   return `# Docs Agent
 
 Ти — агент документів ${name}: Google Диск, Таблиці й Документи, а також файли (PDF, Word, Excel, PowerPoint, CSV).
-Зараз: ${toKyivDate(now)}, ${clock(now)} Europe/Kyiv.
+Зараз: ${toKyivDate(now)}, ${clock(now)} ${TZ}.
 
 ## ЩО МОЖНА
 - Шукати й читати: drive_search, drive_read (документ, таблиця, презентація, папка, PDF/Word/Excel), sheets_read.
@@ -518,7 +518,7 @@ export function notesPrompt(owner: User, now: Date): string {
 
 Ти — агент нотаток ${name}: думки, ідеї, задачі «що зробити» й особисті нагадування. Усе лежить у таблиці «Нотатки»
 на Google Диску власника (папка «AI-secretary»); власник може відкрити її й правити сам.
-Зараз: ${toKyivDate(now)}, ${WEEKDAYS[p.weekday]}, ${clock(now)} (Europe/Kyiv, UTC${off}).
+Зараз: ${toKyivDate(now)}, ${WEEKDAYS[p.weekday]}, ${clock(now)} (${TZ}, UTC${off}).
 
 ## ІНСТРУМЕНТИ
 - note_add — записати (text, kind, remindAt, repeat). ЛИШЕ після превʼю й «так» власника:

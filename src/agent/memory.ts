@@ -4,6 +4,7 @@ import { readAppFile, writeAppFile } from "../google/drive";
 import { hasDriveScope, loadOwnerSettings } from "../google/oauth";
 import type { ChatMessage } from "../llm/openrouter";
 import type { Tool } from "./runner";
+import { TZ } from "../lib/time";
 
 /**
  * The conversation memory — n8n's «Window Buffer Memory» (LangChain's buffer window memory), with no database: ONE
@@ -109,7 +110,7 @@ function recent(now: number): Entry[] {
 
 /** The session's latest pairs as chat turns, oldest first (what the model sees before the current message). */
 export function conversationHistory(now = Date.now()): ChatMessage[] {
-  const time = (t: number) => new Date(t).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Kyiv" });
+  const time = (t: number) => new Date(t).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
   return recent(now).map((e) => (e.who === "u" ? { role: "user", content: `[${time(e.t)}] ${e.text}` } : { role: "assistant", content: e.text }));
 }
 
