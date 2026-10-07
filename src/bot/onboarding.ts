@@ -1,4 +1,5 @@
-import type { Env } from "../env";
+import { bitrixConfigured, type Env } from "../env";
+import type { InlineKeyboard } from "../telegram/types";
 import { sendTab } from "./tabs";
 import { hasGoogleAuth } from "../google/oauth";
 import { esc, Telegram } from "../telegram/api";
@@ -42,19 +43,36 @@ export async function startOnboarding(env: Env, user: User): Promise<void> {
     return;
   }
   const hello = user.full_name ? `👋 Вітаю, ${esc(user.full_name)}!` : "👋 Вітаю!";
-  await tg.send(user.tg_id, `${hello}\n\n${helpText()}`, { removeKeyboard: true });
+  await tg.send(user.tg_id, `${hello}\n\n${helpText()}`, { keyboard: mainMenu(env) });
 }
 
 export function helpText(): string {
   return [
-    "<b>Пишіть мені як людині</b> — текстом, голосом, скріншотом чи пересланою перепискою:",
+    "🗓 <b>AI-секретар</b>",
+    "<i>Пишіть як людині — текстом, голосом, скріншотом чи пересланою перепискою.</i>",
     "",
-    "📅 «Зустріч з Іваном завтра о 14 в Zoom» · «Що в мене сьогодні?» · «Перенеси стендап на 15:00»",
-    "📧 «Перевір пошту» · «Листи від Марії за тиждень» · «Відповідай, що я погоджуюсь»",
-    "📒 «Запиши ідею: …» · «Нагадай мені завтра о 9 подзвонити в банк» · «Що я записував про звіт?»",
-    "💬 Відповідайте (reply) на моє повідомлення про зустріч чи лист: «скасуй», «хто буде?», «додай нотатку: …».",
-    "🔔 Про нові запрошення й зміни в календарі та про нові листи повідомляю одразу; щоранку — зустрічі на сьогодні.",
-    "",
-    "/notes — нотатки · /bitrix — задачі Bitrix24 · /settings — підключення й нагадування · /reset — почати розмову заново · /help — ця довідка",
+    "📅 <b>Календар</b>",
+    "<blockquote>Зустріч з Іваном завтра о 14 в Zoom\nЩо в мене сьогодні?\nПеренеси стендап на 15:00</blockquote>",
+    "📧 <b>Пошта</b>",
+    "<blockquote>Перевір пошту\nЛисти від Марії за тиждень\nВідповідай, що я погоджуюсь</blockquote>",
+    "📒 <b>Нотатки</b>",
+    "<blockquote>Запиши ідею: …\nНагадай мені завтра о 9 подзвонити в банк\nЩо я записував про звіт?</blockquote>",
+    "💬 <b>Відповідайте (reply)</b> на моє повідомлення — «скасуй», «хто буде?», «додай нотатку: …».",
+    "🔔 Про запрошення, зміни й нові листи пишу одразу; ☀️ щоранку — план на день.",
   ].join("\n");
+}
+
+/** The buttons under the main menu: everything the commands open, one tap each. */
+export function mainMenu(env: Env): InlineKeyboard {
+  return [
+    [
+      { text: "📒 Нотатки", callback_data: "menu:notes" },
+      ...(bitrixConfigured(env) ? [{ text: "📋 Bitrix24", callback_data: "menu:bitrix" }] : []),
+    ],
+    [
+      { text: "⚙️ Налаштування", callback_data: "set:open" },
+      { text: "📖 Інструкції", callback_data: "guide:menu" },
+    ],
+    [{ text: "🧹 Почати розмову заново", callback_data: "menu:reset" }],
+  ];
 }

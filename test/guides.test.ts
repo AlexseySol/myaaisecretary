@@ -12,13 +12,16 @@ const press = (data: string): TgUpdate => ({ update_id: 1, callback_query: { id:
 const say = (text: string): TgUpdate => ({ update_id: 2, message: { message_id: 6, date: 0, chat: { id: OWNER, type: "private" }, from, text } });
 
 describe("📖 guides inside the bot", () => {
-  it("/help offers Google, Telegram and Bitrix24; the Google tab (no client yet) lists the 6 APIs and asks for the file", async () => {
+  it("/help: the main menu's buttons lead to the guides, notes and settings; the Google tab (no client yet) lists the 6 APIs and asks for the file", async () => {
     const calls = mockFetch([]);
     const { env } = testEnv({ GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "" });
     await handleUpdate(env, say("/help"));
     const help = tgCalls(calls, "sendMessage").at(-1)!;
-    expect(JSON.stringify(help.reply_markup)).toContain("guide:google");
-    expect(JSON.stringify(help.reply_markup)).toContain("guide:bitrix");
+    for (const data of ["guide:menu", "menu:notes", "set:open"]) expect(JSON.stringify(help.reply_markup)).toContain(data);
+    await handleUpdate(env, press("guide:menu"));
+    const menu = tgCalls(calls, "sendMessage").at(-1)!;
+    expect(JSON.stringify(menu.reply_markup)).toContain("guide:google");
+    expect(JSON.stringify(menu.reply_markup)).toContain("guide:bitrix");
 
     await handleUpdate(env, press("guide:google"));
     const sent = String(tgCalls(calls, "sendMessage").at(-1)!.text);

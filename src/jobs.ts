@@ -1,7 +1,7 @@
 import { type AgentInput, handleWithAgents } from "./agent";
 import type { Continuation } from "./agent/continue";
 import { type BitrixAction, runBitrixAction } from "./bitrix/menu";
-import { helpText } from "./bot/onboarding";
+import { helpText, mainMenu } from "./bot/onboarding";
 import { type Env, gmailPushConfigured } from "./env";
 import { gmailSync } from "./google/gmailPush";
 import { reportWake, setupGoogleWake } from "./google/wake";
@@ -179,7 +179,7 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       const count = await markUpcoming(env);
       // Google becomes the clock (new mail and meeting reminders); a problem there must not fail the connection.
       if (job.gmail) await setupGoogleWake(env, true).catch((err) => logError(env, "google.wake", err));
-      await new Telegram(env).send(env.OWNER_TELEGRAM_ID, `✅ Google підключено. Подій на найближчі 30 днів: ${count}.\n\n${helpText()}`);
+      await new Telegram(env).send(env.OWNER_TELEGRAM_ID, `✅ Google підключено. Подій на найближчі 30 днів: ${count}.\n\n${helpText()}`, { keyboard: mainMenu(env) });
       await ensureNotesSheet(env).catch((err) => logError(env, "notes", err));
       return;
     }

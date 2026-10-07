@@ -1,12 +1,12 @@
 import { forgetConversation } from "../agent/memory";
-import { helpText, sendConnectGoogle, startOnboarding, tourText } from "../bot/onboarding";
+import { helpText, mainMenu, sendConnectGoogle, startOnboarding, tourText } from "../bot/onboarding";
 import { sendTab } from "../bot/tabs";
 import { handleConnectAnswer } from "../bot/connect";
 import { handleSettingsButton, showSettings } from "../bot/settings";
 import { applyIntegrations } from "../integrations";
 import { type BitrixAction, showBitrixMenu, showReportMenu } from "../bitrix/menu";
 import { askGoogleClient, handleGoogleClientFile } from "../bot/googleClient";
-import { GUIDE_MENU, type Guide, handleGuideReply, showGuide, showGuideMenu } from "../bot/guides";
+import { type Guide, handleGuideReply, showGuide, showGuideMenu } from "../bot/guides";
 import { loadOwner, type User } from "../bot/owner";
 import { googleConfigured, isOwner, type Env } from "../env";
 import { connectWithCode } from "../google/connect";
@@ -165,7 +165,7 @@ async function handleCommand(env: Env, user: User, text: string): Promise<boolea
       await showSettings(env, user);
       return true;
     case "/help":
-      await tg.send(user.tg_id, `${helpText()}\n\n📖 Покрокові інструкції — кнопками нижче.`, { keyboard: GUIDE_MENU });
+      await tg.send(user.tg_id, helpText(), { keyboard: mainMenu(env) });
       return true;
     case "/reset":
       await forgetConversation(env);
@@ -234,6 +234,15 @@ async function handleCallback(env: Env, cq: TgCallbackQuery): Promise<void> {
     });
     await tg.answerCallback(cq.id, done?.toast ?? "Нотатку не знайдено в таблиці").catch(() => undefined);
     if (done && cq.message) await tg.edit(chatId, cq.message.message_id, done.html).catch(() => undefined);
+    return;
+  }
+  // The main menu's buttons (/start, /help).
+  if (cq.data === "menu:notes" || cq.data === "menu:bitrix" || cq.data === "menu:reset") {
+    const tg = new Telegram(env);
+    await tg.answerCallback(cq.id, cq.data === "menu:reset" ? "🧹 Контекст очищено" : undefined).catch(() => undefined);
+    if (cq.data === "menu:notes") await showNotes(env, chatId);
+    else if (cq.data === "menu:bitrix") await showBitrixMenu(env, chatId);
+    else await forgetConversation(env);
     return;
   }
   if (cq.data === "gclient") {
