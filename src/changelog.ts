@@ -18,6 +18,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    v: 53,
+    date: "2026-10-07",
+    changed: ["🧪 Привіт, Вероніко! Тобі прийшло?"],
+  },
+  {
     v: 52,
     date: "2026-10-07",
     changed: ["🧪 ТЕСТ ПРИВЕТ!"],
