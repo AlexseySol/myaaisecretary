@@ -29,12 +29,7 @@
    - **Workflows** → **Read and write**
 5. **Generate token** → скопіюйте `github_pat_…` (його покажуть лише раз).
 
-### Крок 4. Резервне оновлення в GitHub
-
-1. У своєму форку вкладка **Actions** → **I understand my workflows, go ahead and enable them**.
-2. Зліва **Sync from upstream** → **Enable workflow**.
-
-### Крок 5. Vercel
+### Крок 4. Vercel
 
 1. Відкрийте <https://vercel.com/new> → **Import** навпроти свого форка `aisecretary`.
 2. Розгорніть **Environment Variables** і додайте:
@@ -48,7 +43,7 @@
 
 3. **Deploy** → дочекайтеся «Congratulations».
 
-### Крок 6. Запуск
+### Крок 5. Запуск
 
 1. Відкрийте `https://<назва-проєкту>.vercel.app/api/setup` — відкриється ваш бот.
 2. Напишіть йому `/start` → **⚙️ Налаштувати** → Google підключається прямо в боті (є відео).

@@ -36,7 +36,7 @@ else yourself.
 
 In a chat without a terminal, or when your sandbox cannot reach api.telegram.org / github.com: do not clone, do not
 ask for network or «Capabilities» settings, a Vercel token or GitHub, do not create an empty project. Give the user
-these steps and stop: «1) <https://github.com/Mem341/aisecretary> → **Fork** → Create fork; 2) в форке **Actions** → «I understand my workflows, go ahead and enable them» → слева **Sync from upstream** → **Enable workflow**; 3) <https://vercel.com/new> → **Import** форка → 3 значения в Environment Variables → Deploy; 4) открыть https://<проект>.vercel.app/api/setup; в коде форка ничего не менять».
+these steps and stop: «1) <https://github.com/Mem341/aisecretary> → **Fork** → Create fork; 2) ключ GitHub для форка (README, крок 3) → `GITHUB_TOKEN`; 3) <https://vercel.com/new> → **Import** форка → 3 значения и `GITHUB_TOKEN` в Environment Variables → Deploy; 4) открыть https://<проект>.vercel.app/api/setup; в коде форка ничего не менять».
 
 ## Step 1 — collect the inputs
 
@@ -65,7 +65,7 @@ If a check fails: say which item is wrong and why, and ask for that item only.
 1. **Project — the user's FORK of github.com/Mem341/aisecretary, imported into Vercel.** That is what makes the bot
    update itself: the fork's `.github/workflows/sync.yml` merges the original's tested `main` every 30 minutes; Vercel
    builds every push. GitHub keeps Actions off in a fork — the user turns them on once. No token or secret.
-   - Steps for the user: «1) <https://github.com/Mem341/aisecretary> → **Fork** → Create fork; 2) в форке **Actions** → «I understand my workflows, go ahead and enable them» → слева **Sync from upstream** → **Enable workflow**; 3) <https://vercel.com/new> → **Import** форка → 3 значения в Environment Variables → Deploy; 4) открыть https://<проект>.vercel.app/api/setup; в коде форка ничего не менять» (Vercel preset **Other**, no build command, root `/`).
+   - Steps for the user: «1) <https://github.com/Mem341/aisecretary> → **Fork** → Create fork; 2) ключ GitHub для форка (README, крок 3) → `GITHUB_TOKEN`; 3) <https://vercel.com/new> → **Import** форка → 3 значения и `GITHUB_TOKEN` в Environment Variables → Deploy; 4) открыть https://<проект>.vercel.app/api/setup; в коде форка ничего не менять» (Vercel preset **Other**, no build command, root `/`).
    - With `gh`/GitHub access as the user: fork it, then import the fork in Vercel (`npx vercel link` +
      `npx vercel git connect`); enabling Actions in the fork is the user's own click.
    - No GitHub possible (`repo_no_access`, no account)? Do not ask. Deploy from files — the bot works but does not
