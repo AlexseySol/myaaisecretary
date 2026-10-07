@@ -74,7 +74,7 @@ async function nudgeReminders(env: Env): Promise<void> {
 async function checkNews(env: Env): Promise<void> {
   if (firstTime("news", 6 * 3600_000)) await env.jobs.send({ type: "news" }).catch(() => undefined);
   // The same wake-ups keep the owner's fork updated, when they gave a GitHub token (forkSync.ts).
-  if (env.GITHUB_TOKEN && firstTime("fork-sync", 15 * 60_000)) await env.jobs.send({ type: "fork_sync" }).catch(() => undefined);
+  if (env.GITHUB_TOKEN && firstTime("fork-sync", 60_000)) await env.jobs.send({ type: "fork_sync" }).catch(() => undefined);
 }
 
 /** POST /api/telegram — Telegram webhook. Answers at once; the update is handled in the background. */

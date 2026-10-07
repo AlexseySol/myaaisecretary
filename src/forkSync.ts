@@ -8,7 +8,7 @@ export type ForkSync = "updated" | "current" | "waiting" | "conflict" | "failed"
 
 /**
  * GitHub's «Sync fork», pressed by the bot: when the owner put a GitHub token for their fork into GITHUB_TOKEN, every
- * wake-up (at most every 15 minutes per instance, app.ts) takes the original's main into the fork once the original's
+ * wake-up (at most once a minute per instance, app.ts) takes the original's main into the fork once the original's
  * `test` check has passed; Vercel deploys the push and the bot then says «🆕 Бот оновлено». GitHub's own schedule in a
  * fork (sync.yml) is late or silent, this is not. Without the token nothing happens here.
  */
