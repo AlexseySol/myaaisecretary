@@ -7,8 +7,10 @@
 >    (@userinfobot), `OPENROUTER_API_KEY` (openrouter.ai/keys). Nothing else — Google is connected later inside the bot.
 > 3. Set them as Vercel environment variables, deploy, open `https://<domain>/api/setup`. Report «Реализовано / Не реализовано».
 >    **In a chat without a terminal** (claude.ai, ChatGPT): do NOT clone, do NOT ask for network / «Capabilities» /
->    egress settings, a Vercel token or GitHub. Give the user this one link — Vercel takes the code itself and asks the
->    same three values — and stop: <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
+>    egress settings, a Vercel token or GitHub. Give the user these steps and stop — GitHub makes their own copy with the
+>    self-update workflow (Vercel's clone link drops it — never give it), Vercel imports it and asks the same three values:
+>    1) <https://github.com/new?template_name=aisecretary&template_owner=Mem341> → **Public** → Create repository; 2) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy;
+>    3) открыть https://<проект>.vercel.app/api/setup
 > 4. **Check your copy:** the current code has `vercel.json`, `api/` and `src/` in the root. If yours does not, you are
 >    reading an outdated copy (attached files, a project snapshot, memory of an old chat) — ignore it and read
 >    <https://github.com/Mem341/aisecretary> (branch `main`) again.
@@ -51,7 +53,15 @@
 
 ## Запуск
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&envDescription=Your+numeric+Telegram+ID+%28%40userinfobot%29%2C+bot+token+%28%40BotFather%29%2C+OpenRouter+API+key&envLink=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary%23deploy&project-name=aisecretary&repository-name=aisecretary)
+Два кроки, без токенів і налаштувань:
+
+1. **[Створити свою копію ↗](https://github.com/new?template_name=aisecretary&template_owner=Mem341)** — GitHub зробить копію з усім, що потрібно для автооновлення. Оберіть
+   **Public** → **Create repository**. (У приватній копії безкоштовних хвилин GitHub на часті перевірки не вистачить.)
+2. **[Імпортувати у Vercel ↗](https://vercel.com/new)** → оберіть цю копію → вкажіть `TELEGRAM_BOT_TOKEN`,
+   `OWNER_TELEGRAM_ID`, `OPENROUTER_API_KEY` → **Deploy** → відкрийте `https://<адреса>/api/setup`.
+
+Далі копія сама бере нові версії кожні 5 хвилин, Vercel їх збирає, а бот пише «🆕 Бот оновлено». Не використовуйте
+Fork (у ньому GitHub вимикає автооновлення) і кнопку «Deploy» Vercel (вона копіює без файлів автооновлення).
 
 Vercel позначить `TELEGRAM_BOT_TOKEN` і `OPENROUTER_API_KEY` як «Потребує уваги» — це лише порада сховати ключі. Щоб прибрати:
 Project → **Settings → Environment Variables** → у кожного ключа **⋯ → Delete**, потім **Add New** з тим самим іменем і

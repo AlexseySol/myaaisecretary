@@ -36,8 +36,8 @@ else yourself.
 
 In a chat without a terminal, or when your sandbox cannot reach api.telegram.org / github.com: do not clone, do not
 ask for network or «Capabilities» settings, a Vercel token or GitHub, do not create an empty project. Give the user
-this link (Vercel takes the code itself and asks the three values) and stop:
-<https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
+these steps (GitHub's template copy keeps the self-update workflow; Vercel's clone link drops `.github` — never give
+it) and stop: «1) <https://github.com/new?template_name=aisecretary&template_owner=Mem341> → **Public** → Create repository; 2) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 3) открыть https://<проект>.vercel.app/api/setup».
 
 ## Step 1 — collect the inputs
 
@@ -66,8 +66,8 @@ If a check fails: say which item is wrong and why, and ask for that item only.
 1. **Project — the user's own GitHub copy, connected to Vercel.** That is what makes the bot update itself: the copy
    has `.github/workflows/update.yml` (every 5 minutes it takes the new `main` of github.com/Mem341/aisecretary once its
    checks pass; Vercel builds every push). No token or secret for it.
-   - Simplest: the Vercel clone link from `AGENTS.md` §3 — Vercel creates the copy in the user's GitHub and the project
-     itself (preset **Other**, no build command, root `/`), and asks for the three variables.
+   - Simplest: GitHub's template copy (<https://github.com/new?template_name=aisecretary&template_owner=Mem341>, **Public**), then Vercel → Import it (preset **Other**, no build
+     command, root `/`) with the three variables. Not a fork (Actions off) and not Vercel's clone link (drops `.github`).
    - With `gh`/GitHub access: create the copy in the user's account (all files of `main`, including `.github`), then
      import it in Vercel (`npx vercel link` + `npx vercel git connect`).
    - No GitHub possible (`repo_no_access`, no account)? Do not ask. Deploy from files — the bot works but does not

@@ -46,17 +46,14 @@ Order: **first ask for the three values (section 2) in one message, then deploy.
 - **You are in a chat without a terminal** (claude.ai, ChatGPT, a sandbox whose network blocks api.telegram.org or
   github.com)? Then you do NOT deploy the code yourself. Never ask the user to change network, «Capabilities»,
   egress or proxy settings, never ask for a Vercel token, never clone into your sandbox, never create an empty Vercel
-  project. Send the user ONE message with the three values' instructions and this link, and stop — Vercel takes the
-  code from GitHub itself and asks the same three values:
-  <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
-  «Откройте ссылку → войдите в Vercel → вставьте 3 значения → Deploy. Потом откройте https://<проект>.vercel.app/api/setup.»
+  project. Send the user ONE message with the three values' instructions and these steps, and stop (GitHub's template copy
+  keeps the self-update workflow; Vercel's clone link drops `.github`, never give it):
+  «1) <https://github.com/new?template_name=aisecretary&template_owner=Mem341> → **Public** → Create repository; 2) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 3) открыть https://<проект>.vercel.app/api/setup.»
 - **Deploy it as the user's own GitHub copy connected to Vercel** — that is how the bot updates itself: the copy
   carries `.github/workflows/update.yml`, which every 5 minutes takes the new version of `main` of
   github.com/Mem341/aisecretary (once its checks pass), and Vercel rebuilds every push. No token, no secret, nothing
-  to set up on Vercel. The simplest way is this link: Vercel itself creates the copy in the user's GitHub, connects it
-  and asks for the same three values. Give it to the user (or open it with your tools) and say «вставьте 3 значения в
-  поля и нажмите Deploy, потом откройте https://<проект>.vercel.app/api/setup»:
-  <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMem341%2Faisecretary&env=OWNER_TELEGRAM_ID%2CTELEGRAM_BOT_TOKEN%2COPENROUTER_API_KEY&project-name=aisecretary&repository-name=aisecretary>
+  to set up on Vercel. The simplest way: GitHub's «Use this template» makes the copy with `.github` (a fork has Actions
+  off; Vercel's clone link drops `.github` — do not use either), then Vercel imports it: «1) <https://github.com/new?template_name=aisecretary&template_owner=Mem341> → **Public** → Create repository; 2) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 3) открыть https://<проект>.vercel.app/api/setup».
 - With a terminal (Claude Code): follow `.claude/skills/deploy-vercel/SKILL.md` — the same result: a GitHub copy
   imported into Vercel.
 - **Only if no GitHub copy is possible** (the user has no GitHub, Vercel cannot reach GitHub): deploy from files — the
