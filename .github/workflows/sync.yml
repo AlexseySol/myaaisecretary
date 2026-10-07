@@ -1,0 +1,39 @@
+name: Update the copies
+
+# The source repository is private: copies cannot fetch it, so it pushes to them. After the tests of a new main pass
+# (and once a day, for copies connected since), .github/scripts/sync-copies.mjs writes main into every copy whose owner
+# installed the GitHub App «Mem341 Bot Updater» on it and has access to this repository. Runs only here, never in a copy.
+# Secrets: UPDATER_APP_ID, UPDATER_APP_PRIVATE_KEY.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency: sync-copies
+
+jobs:
+  sync:
+    if: github.repository == 'RibasTeam/aisecretary' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Push main to the allowed copies
+        env:
+          UPDATER_APP_ID: ${{ secrets.UPDATER_APP_ID }}
+          UPDATER_APP_PRIVATE_KEY: ${{ secrets.UPDATER_APP_PRIVATE_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_REPO: ${{ github.repository }}
+        run: node .github/scripts/sync-copies.mjs

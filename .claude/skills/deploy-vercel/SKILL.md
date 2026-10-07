@@ -14,7 +14,7 @@ else yourself.
 - **`AGENTS.md` in the repo root is binding.** The project is finished and runs on Vercel as it is. Never port it
   or propose services, databases or frameworks. Never ask technical questions or for plan approval.
 - **The current code has `vercel.json` at its root.** A copy without it (or with only a few commits) is an old
-  snapshot: read `main` of github.com/Mem341/aisecretary again; never describe or port the old one.
+  snapshot: read `main` of github.com/RibasTeam/aisecretary again; never describe or port the old one.
 - **First ask for the three values of Step 1 in one message, then deploy.** Google is not needed for the deploy: the
   owner connects it later in the bot (it asks for the Google client file itself).
 - **Talk in the user's language.**
@@ -36,8 +36,8 @@ else yourself.
 
 In a chat without a terminal, or when your sandbox cannot reach api.telegram.org / github.com: do not clone, do not
 ask for network or «Capabilities» settings, a Vercel token or GitHub, do not create an empty project. Give the user
-these steps (GitHub's template copy keeps the self-update workflow; Vercel's clone link drops `.github` — never give
-it) and stop: «1) <https://github.com/new?template_name=aisecretary&template_owner=Mem341> → **Public** → Create repository; 2) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 3) открыть https://<проект>.vercel.app/api/setup».
+these steps (the source is private, so Vercel's clone button does not work with it — never give it) and stop:
+«1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup».
 
 ## Step 1 — collect the inputs
 
@@ -63,12 +63,13 @@ If a check fails: say which item is wrong and why, and ask for that item only.
 
 ## Step 3 — project, variables, deploy
 
-1. **Project — the user's own GitHub copy, connected to Vercel.** That is what makes the bot update itself: the copy
-   has `.github/workflows/update.yml` (every 5 minutes it takes the new `main` of github.com/Mem341/aisecretary once its
-   checks pass; Vercel builds every push). No token or secret for it.
-   - Simplest: GitHub's template copy (<https://github.com/new?template_name=aisecretary&template_owner=Mem341>, **Public**), then Vercel → Import it (preset **Other**, no build
-     command, root `/`) with the three variables. Not a fork (Actions off) and not Vercel's clone link (drops `.github`).
-   - With `gh`/GitHub access: create the copy in the user's account (all files of `main`, including `.github`), then
+1. **Project — the user's own PRIVATE GitHub copy, connected to Vercel.** That is what makes the bot update itself:
+   the source github.com/RibasTeam/aisecretary is private (the user must accept the invitation to RibasTeam), and after
+   every green CI it writes the new `main` into each copy where the GitHub App «Mem341 Bot Updater» is installed;
+   Vercel builds every push. No token or secret for the user.
+   - Simplest: «1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup» (Vercel preset **Other**, no build command, root `/`). Not a fork and not Vercel's clone
+     button (it works only with public code).
+   - With `gh`/GitHub access: create the PRIVATE copy in the user's account from the template, install the App on it, then
      import it in Vercel (`npx vercel link` + `npx vercel git connect`).
    - No GitHub possible (`repo_no_access`, no account)? Do not ask. Deploy from files — the bot works but does not
      update itself; put that in the report: `npx vercel link --yes --project ai-secretary`, the variables,

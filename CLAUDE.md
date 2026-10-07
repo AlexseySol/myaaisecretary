@@ -9,7 +9,7 @@ OpenRouter (LLM, and speech-to-text for voice), optional Zoom.
 
 **Asked to deploy? It is a ready Vercel project: deploy it to Vercel as it is; ask only TELEGRAM_BOT_TOKEN,
 OWNER_TELEGRAM_ID, OPENROUTER_API_KEY; never port or propose other platforms. No `vercel.json` in what you read = an
-outdated copy — re-read `main` of github.com/Mem341/aisecretary.** Read `AGENTS.md` first. The project is finished: never port or redesign it, ask the user only for env values,
+outdated copy — re-read `main` of github.com/RibasTeam/aisecretary.** Read `AGENTS.md` first. The project is finished: never port or redesign it, ask the user only for env values,
 report as "Реализовано / Не реализовано".
 
 Vercel only (no other platform): `.claude/skills/deploy-vercel/SKILL.md` (`/deploy-vercel`).
@@ -164,11 +164,14 @@ webhook and redirects to the bot; `/api/health` shows the state.
   Write release lines for every owner: what the product does now, in general words — never this owner's case, test
   data or names; `added` = new ability, `changed` = works differently, `fixed` = did not work and now does (shown as
   «Виправлено:»).
-- Updates: a deployed copy is the owner's GitHub copy connected to Vercel; its `.github/workflows/update.yml` (skipped in
-  Mem341/aisecretary itself) takes the new `main` every 5 minutes once its tests pass — no token, no secret; keep it that way.
-  Vercel's «Deploy» button copies without `.github`: `bot/autoUpdate.ts` sends the owner once (`OwnerSettings.au`) a button
-  to GitHub's new-file page with a small workflow (`UPDATE_CALLER`, every 30 min) that calls this `update.yml`
-  (`workflow_call`) — one «Commit changes».
+- Updates: the source RibasTeam/aisecretary is private; a deployed copy is the owner's PRIVATE template copy connected
+  to Vercel. Copies cannot fetch the source, so it pushes: `.github/workflows/sync.yml` (after a green CI on `main`, daily,
+  manually; only in RibasTeam/aisecretary) runs `.github/scripts/sync-copies.mjs` with the GitHub App «Mem341 Bot Updater»
+  (secrets UPDATER_APP_ID, UPDATER_APP_PRIVATE_KEY): through every installation it writes the newest tested `main` into each
+  repository as a new commit on top of its history — never a force push. Code goes only to a private repository of a
+  personal account that is a copy of the bot and whose owner has access to the source right now (`verdict`, tested in
+  `test/syncCopies.test.ts`); everything else is skipped with the reason in the log. Vercel's clone button does not work
+  with private code.
   `.github/workflows/wake.yml` opens the bot's `/api/setup` the moment Vercel reports a successful production deploy
   (`deployment_status`), so «🆕 Бот оновлено» comes at once: it derives the production address from the deploy's own
   («<project>-<team>.vercel.app», «<project>.vercel.app», or the repo variable `BOT_URL`) and wakes only the one whose

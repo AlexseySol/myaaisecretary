@@ -7,7 +7,6 @@ import { gmailSync } from "./google/gmailPush";
 import { reportWake, setupGoogleWake } from "./google/wake";
 import { connectLink, forgetGoogleAuth, GoogleAuthRevokedError, hasGmailScope, hasGoogleAuth } from "./google/oauth";
 import { announceUpdate } from "./bot/news";
-import { offerAutoUpdate } from "./bot/autoUpdate";
 import { ensureNotesSheet } from "./bot/notesMenu";
 import { sendDigest, sendDueDigest, sendMorningFallback } from "./google/digest";
 import { sendReminders } from "./google/reminders";
@@ -182,7 +181,6 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       if (job.gmail) await setupGoogleWake(env, true).catch((err) => logError(env, "google.wake", err));
       await new Telegram(env).send(env.OWNER_TELEGRAM_ID, `✅ Google підключено. Подій на найближчі 30 днів: ${count}.\n\n${helpText()}`);
       await ensureNotesSheet(env).catch((err) => logError(env, "notes", err));
-      await offerAutoUpdate(env).catch((err) => logError(env, "autoupdate", err));
       return;
     }
     case "daily": {
@@ -201,7 +199,6 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       await step("google.wake", () => setupGoogleWake(env));
       await step("news", () => announceUpdate(env));
       await step("notes", () => ensureNotesSheet(env));
-      await step("autoupdate", () => offerAutoUpdate(env));
       return;
     }
     case "morning":
@@ -212,7 +209,6 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       await announceUpdate(env);
       // After an update with notes: the sheet is made at once and the owner is told where it is.
       await ensureNotesSheet(env).catch((err) => logError(env, "notes", err));
-      await offerAutoUpdate(env).catch((err) => logError(env, "autoupdate", err));
       return;
     case "digest":
       return withTyping(env, job.chatId, async () => {

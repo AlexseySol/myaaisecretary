@@ -5,19 +5,19 @@ Read this first. These rules override your own judgement about what to ask or pr
 **In short:** a ready Vercel project → deploy it to Vercel as it is → ask only `TELEGRAM_BOT_TOKEN`,
 `OWNER_TELEGRAM_ID`, `OPENROUTER_API_KEY` → set them, deploy, open `/api/setup` → report «Реализовано / Не реализовано».
 Never port, never propose other platforms or services. No `vercel.json` in your copy = an outdated copy: re-read
-`main` of https://github.com/Mem341/aisecretary.
+`main` of https://github.com/RibasTeam/aisecretary.
 
 ## 1. The project is finished — do not port, redesign or choose anything
 
-- The code in `main` of <https://github.com/Mem341/aisecretary> is ready for **Vercel** as it is. Vercel is the
+- The code in `main` of <https://github.com/RibasTeam/aisecretary> is ready for **Vercel** as it is. Vercel is the
   only platform. Do not move it anywhere else.
 - It has **no database, no queue, no file storage**. Do not propose or add any database, queue, storage, other
   hosting, service or framework.
 - **Check that you read the current code.** The current `main` has `vercel.json`, `api/` and `src/` at its root and
   about a hundred commits. A copy without `vercel.json`, or with only a few commits, is an **old snapshot** (for
   example a repository attached to a chat or project long ago): do not describe it, do not port it — read `main` of
-  <https://github.com/Mem341/aisecretary> again. If you cannot refresh it, tell the user in one line: «Обновите
-  подключённый репозиторий (Sync) или пришлите ссылку github.com/Mem341/aisecretary заново».
+  <https://github.com/RibasTeam/aisecretary> again. If you cannot refresh it, tell the user in one line: «Обновите
+  подключённый репозиторий (Sync) или пришлите ссылку github.com/RibasTeam/aisecretary заново».
 
 ## 2. Ask the user ONLY for these values — in one message
 
@@ -46,20 +46,21 @@ Order: **first ask for the three values (section 2) in one message, then deploy.
 - **You are in a chat without a terminal** (claude.ai, ChatGPT, a sandbox whose network blocks api.telegram.org or
   github.com)? Then you do NOT deploy the code yourself. Never ask the user to change network, «Capabilities»,
   egress or proxy settings, never ask for a Vercel token, never clone into your sandbox, never create an empty Vercel
-  project. Send the user ONE message with the three values' instructions and these steps, and stop (GitHub's template copy
-  keeps the self-update workflow; Vercel's clone link drops `.github`, never give it):
-  «1) <https://github.com/new?template_name=aisecretary&template_owner=Mem341> → **Public** → Create repository; 2) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 3) открыть https://<проект>.vercel.app/api/setup.»
-- **Deploy it as the user's own GitHub copy connected to Vercel** — that is how the bot updates itself: the copy
-  carries `.github/workflows/update.yml`, which every 5 minutes takes the new version of `main` of
-  github.com/Mem341/aisecretary (once its checks pass), and Vercel rebuilds every push. No token, no secret, nothing
-  to set up on Vercel. The simplest way: GitHub's «Use this template» makes the copy with `.github` (a fork has Actions
-  off; Vercel's clone link drops `.github` — do not use either), then Vercel imports it: «1) <https://github.com/new?template_name=aisecretary&template_owner=Mem341> → **Public** → Create repository; 2) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 3) открыть https://<проект>.vercel.app/api/setup».
+  project. Send the user ONE message with the three values' instructions and these steps, and stop (the source is
+  private, so Vercel's clone button does not work with it — never give it):
+  «1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup».
+- **Deploy it as the user's own PRIVATE GitHub copy connected to Vercel** — that is how the bot updates itself. The
+  source github.com/RibasTeam/aisecretary is private (the user must be invited to RibasTeam), so the copy cannot fetch
+  it: after every green CI on its `main` the source writes the new version into each copy where the GitHub App
+  «Mem341 Bot Updater» is installed, and Vercel rebuilds every push. Nothing to set up on Vercel. Vercel's clone button
+  works only with public code and a fork of a private repository stays tied to it — use the template copy:
+  «1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup».
 - With a terminal (Claude Code): follow `.claude/skills/deploy-vercel/SKILL.md` — the same result: a GitHub copy
   imported into Vercel.
 - **Only if no GitHub copy is possible** (the user has no GitHub, Vercel cannot reach GitHub): deploy from files — the
   bot works, but does not update itself; say so in the report. Do not ask and do not port:
   ```bash
-  git clone https://github.com/Mem341/aisecretary && cd aisecretary
+  git clone https://github.com/RibasTeam/aisecretary   # needs access to RibasTeam && cd aisecretary
   npx vercel link --yes --project ai-secretary
   printf '%s' "$VALUE" | npx vercel env add NAME production   # for each variable from section 2
   npx vercel deploy --prod --yes

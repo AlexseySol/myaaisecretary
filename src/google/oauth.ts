@@ -170,8 +170,6 @@ export interface OwnerSettings {
   v?: number;
   /** The notes sheet «Нотатки» on the owner's Drive (google/notes.ts). */
   nt?: string;
-  /** The one-click auto-update button was offered (bot/autoUpdate.ts). */
-  au?: boolean;
 }
 
 /** Keys the owner gave the bot in /settings (Bitrix24, Zoom); kept encrypted in the same pinned message. */
