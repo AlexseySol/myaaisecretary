@@ -37,7 +37,7 @@ else yourself.
 In a chat without a terminal, or when your sandbox cannot reach api.telegram.org / github.com: do not clone, do not
 ask for network or «Capabilities» settings, a Vercel token or GitHub, do not create an empty project. Give the user
 these steps (the source is private, so Vercel's clone button does not work with it — never give it) and stop:
-«1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup».
+«1) <https://vercel.com/account/tokens> → Create (без срока) → отправить владельцу RibasTeam/aisecretary токен и название проекта; 2) владелец добавляет строку в секрет `VERCEL_DEPLOY` и запускает CI; 3) Vercel → проект → Settings → Environment Variables → 3 значения → Redeploy; 4) открыть https://<проект>.vercel.app/api/setup» (с доступом к RibasTeam можно и так: «1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup»).
 
 ## Step 1 — collect the inputs
 
@@ -67,7 +67,7 @@ If a check fails: say which item is wrong and why, and ask for that item only.
    the source github.com/RibasTeam/aisecretary is private (the user must accept the invitation to RibasTeam), and after
    every green CI it writes the new `main` into each copy where the GitHub App «Mem341 Bot Updater» is installed;
    Vercel builds every push. No token or secret for the user.
-   - Simplest: «1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup» (Vercel preset **Other**, no build command, root `/`). Not a fork and not Vercel's clone
+   - Simplest: «1) <https://vercel.com/account/tokens> → Create (без срока) → отправить владельцу RibasTeam/aisecretary токен и название проекта; 2) владелец добавляет строку в секрет `VERCEL_DEPLOY` и запускает CI; 3) Vercel → проект → Settings → Environment Variables → 3 значения → Redeploy; 4) открыть https://<проект>.vercel.app/api/setup» (с доступом к RibasTeam можно и так: «1) принять приглашение в RibasTeam; 2) <https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш аккаунт → **Private** → Create repository; 3) <https://github.com/apps/mem341-bot-updater/installations/new> → только эта копия → Install; 4) <https://vercel.com/new> → Import эту копию → 3 значения → Deploy; 5) открыть https://<проект>.vercel.app/api/setup») (Vercel preset **Other**, no build command, root `/`). Not a fork and not Vercel's clone
      button (it works only with public code).
    - With `gh`/GitHub access: create the PRIVATE copy in the user's account from the template, install the App on it, then
      import it in Vercel (`npx vercel link` + `npx vercel git connect`).

@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # «Run workflow» on main: deploys at once to a bot just added to VERCEL_DEPLOY.
+  workflow_dispatch:
 
 jobs:
   test:
@@ -24,7 +26,7 @@ jobs:
   # (a Deploy Hook URL on a line works too). CI uploads this code with the Vercel CLI, like a manual `vercel deploy --prod`.
   deploy:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +57,9 @@ jobs:
                 if curl -fsS -o /dev/null -X POST "$first"; then echo "hook: deploy started"; else echo "hook: did not answer"; fi ;;
               *)
                 rm -rf .vercel
+                # A new bot's project is made on its first deploy; its owner then adds the three values in Vercel.
+                npx --yes vercel project add "$project" --token "$first" > /dev/null 2>&1 || true
+                [ -z "$bot" ] && bot="https://$project.vercel.app"
                 if npx --yes vercel link --yes --project "$project" --token "$first" > /dev/null 2>&1 \
                   && npx --yes vercel deploy --prod --yes --token "$first" > /dev/null 2>&1; then
                   echo "$project: deployed"

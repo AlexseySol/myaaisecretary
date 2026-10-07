@@ -176,10 +176,12 @@ webhook and redirects to the bot; `/api/health` shows the state.
   (`deployment_status`), so «🆕 Бот оновлено» comes at once: it derives the production address from the deploy's own
   («<project>-<team>.vercel.app», «<project>.vercel.app», or the repo variable `BOT_URL`) and wakes only the one whose
   `/api/health` reports this commit.
-- Deploys: `.github/workflows/ci.yml` runs typecheck and tests, then — with the ONE repository secret `VERCEL_DEPLOY`,
-  a line per bot «<Vercel token> <project name> <bot address>» — uploads the code with the Vercel CLI to each project
-  (nothing to set up on Vercel's side, no Git connection) and opens each bot's `/api/setup` to wake it. Never put a
-  token into the code.
+- Deploys (the main way to give someone the bot, since the source is private): `.github/workflows/ci.yml` runs typecheck
+  and tests, then — with the ONE repository secret `VERCEL_DEPLOY`, a line per bot «<Vercel token> <project name> [<bot
+  address>]» (the person's own Vercel token) — makes the project if it is new (`vercel project add`), uploads the code
+  with the Vercel CLI (no Git connection) and opens each bot's `/api/setup` (default `https://<project>.vercel.app`) to
+  wake it; the person sets the three values in their Vercel project. «Run workflow» (workflow_dispatch) on `main`
+  deploys a newly added line at once. Never put a token into the code.
 - Text sent to a model goes through `lib/text.ts`: `safeJson` for every request body (a half emoji — a lone surrogate — is
   invalid JSON for some providers, and one kept in memory broke every later request), `cutText` instead of `slice` when
   shortening text; tool-call arguments that are not valid JSON are echoed back as `{}`. `providerFor`: an OpenAI model is

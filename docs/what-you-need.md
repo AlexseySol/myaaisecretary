@@ -140,14 +140,19 @@ Drive. Голосові розпізнає той самий OpenRouter.
 
 ## Оновлення: бот оновлюється сам
 
-Вихідний код — приватний репозиторій github.com/RibasTeam/aisecretary (потрібне запрошення в RibasTeam). Ваша копія —
-**приватна**, створена з шаблону (<https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш акаунт →
-**Private**), з установленим застосунком **[Mem341 Bot Updater](https://github.com/apps/mem341-bot-updater/installations/new)**
-(лише на цю копію). Після кожного успішного оновлення вихідного коду (і щодня) нова версія записується у вашу копію
-окремим комітом, Vercel сам її збирає, а щойно збірка готова, `wake.yml` будить бота — і він одразу пише «🆕 Бот оновлено».
-Оновлення приходять, лише поки копія приватна й у вас є доступ до RibasTeam/aisecretary.
+Основний спосіб: власник репозиторію розгортає бота у ваш Vercel. Ви даєте йому токен Vercel
+(<https://vercel.com/account/tokens>, без терміну дії) і назву проєкту, він додає рядок у секрет `VERCEL_DEPLOY`.
+Після кожного успішного оновлення коду CI сам завантажує нову версію у ваш проєкт і будить бота — він одразу пише
+«🆕 Бот оновлено». Три значення (`TELEGRAM_BOT_TOKEN`, `OWNER_TELEGRAM_ID`, `OPENROUTER_API_KEY`) ви вписуєте самі у
+Vercel → проєкт → **Settings → Environment Variables**, потім **Deployments → ⋯ → Redeploy**. Вимкнути оновлення —
+видалити токен.
 
-Кнопка Vercel «Deploy» (clone) з приватним кодом не працює — лише **Import** вашої копії на <https://vercel.com/new>.
+Запасний спосіб — власна приватна копія (потрібен доступ до RibasTeam/aisecretary): з шаблону
+(<https://github.com/new?template_name=aisecretary&template_owner=RibasTeam> → ваш **особистий** акаунт → **Private**),
+застосунок **[Mem341 Bot Updater](https://github.com/apps/mem341-bot-updater/installations/new)** лише на цю копію, потім
+**Import** на <https://vercel.com/new>. Нова версія записується в копію окремим комітом, Vercel її збирає. Кнопка Vercel
+«Deploy» (clone) з приватним кодом не працює.
 
-Кілька ботів з одного репозиторію без GitHub-копій: секрет `VERCEL_DEPLOY` у цьому репозиторії, рядок на кожного бота —
-`токен-Vercel назва-проєкту адреса-бота`; після кожного оновлення CI завантажує код у кожен проєкт і будить бота.
+Для власника: секрет `VERCEL_DEPLOY` у цьому репозиторії, рядок на кожного бота —
+`токен-Vercel назва-проєкту [адреса-бота]`; після кожного оновлення CI завантажує код у кожен проєкт (новий створює сам) і
+будить бота. Новий рядок — одразу: **Actions → CI → Run workflow**.
