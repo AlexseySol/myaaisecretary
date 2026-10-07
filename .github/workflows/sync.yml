@@ -9,7 +9,8 @@ name: Sync from upstream
 # them, the rest is still updated and the log asks the owner to press «Sync fork» once.
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    # Not at :00 or :30 — GitHub is busiest then and delays or drops scheduled runs.
+    - cron: "13,43 * * * *"
   workflow_dispatch:
 
 permissions:
