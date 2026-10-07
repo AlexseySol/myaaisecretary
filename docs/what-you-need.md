@@ -132,7 +132,7 @@ Drive. Голосові розпізнає той самий OpenRouter.
 
 | Що бачите | Що зробити |
 |---|---|
-| Бот не бачить оновлень з GitHub | Один секрет `VERCEL_DEPLOY` у GitHub — [див. нижче](#автодеплой-кожне-оновлення-виходить-саме) |
+| Бот не оновлюється | перевірте `GITHUB_TOKEN` у Vercel: ключ для **свого** форка, Contents і Workflows — Read and write |
 | Не приходять нагадування | `/settings` → ⏰ → **«🔁 Налаштувати»** — бот скаже, чого бракує |
 | «Не поставлено галочки» / немає памʼяті | перепідключіть Google й натисніть **«Вибрати все»** |
 | «Cloud Pub/Sub API вимкнено» | [увімкніть Cloud Pub/Sub API](https://console.cloud.google.com/apis/library/pubsub.googleapis.com) у проєкті Google-клієнта |
@@ -140,21 +140,7 @@ Drive. Голосові розпізнає той самий OpenRouter.
 
 ## Оновлення: бот оновлюється сам
 
-Ваш бот — це форк github.com/Mem341/aisecretary, підключений до Vercel. У форку працює
-`.github/workflows/sync.yml`: кожні 30 хвилин він бере нову версію з оригіналу (лише коли її перевірки пройшли),
-зливає у ваш `main`, Vercel її розгортає, бот пише «🆕 Бот оновлено». Ключі (у Vercel) і налаштування (у Telegram)
-не змінюються.
-
-GitHub вимикає Actions у кожному новому форку — один раз: **Actions → I understand my workflows, go ahead and enable
-them → Sync from upstream → Enable workflow**. Оновити одразу: **Actions → Sync from upstream → Run workflow**.
-Не змінюйте код у форку: власні зміни можуть зламати оновлення. Якщо оригінал змінить файли в `.github/workflows`,
-решта оновиться сама, а ці файли — після одного натискання **Sync fork → Update branch** на сторінці форку.
-
-**Надійно й одразу — ключ GitHub (1 хвилина, один раз).** Розклад GitHub у форках запускається із запізненням або
-зовсім не запускається. З ключем форк оновлює сам бот (не частіше ніж раз на 15 хвилин, коли прокидається):
-1. <https://github.com/settings/personal-access-tokens/new> (у своєму акаунті GitHub, де форк).
-2. **Repository access → Only select repositories** → свій форк `aisecretary`.
-3. **Permissions → Contents: Read and write** і **Workflows: Read and write** → **Generate token**.
-4. Vercel → проєкт → **Settings → Environment Variables** → `GITHUB_TOKEN` = ключ → **Redeploy**.
-
-Ключ лишається тільки у вашому Vercel, нікому його не надсилайте.
+Ваш бот — це форк github.com/Mem341/aisecretary, підключений до Vercel. З ключем `GITHUB_TOKEN` (README, крок 3) бот
+сам бере нову перевірену версію з оригіналу у ваш форк (не частіше ніж раз на 15 хвилин, коли прокидається, і щодня),
+Vercel її розгортає, бот пише «🆕 Бот оновлено». Ключі (у Vercel) і налаштування (у Telegram) не змінюються.
+Не змінюйте код у форку: власні зміни можуть зламати оновлення.
