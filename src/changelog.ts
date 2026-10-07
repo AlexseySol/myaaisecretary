@@ -18,6 +18,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    v: 45,
+    date: "2026-10-07",
+    changed: ["🧪 Тест: оновлення за новим розкладом (о :13 і :43)"],
+  },
+  {
     v: 44,
     date: "2026-10-07",
     changed: ["🧪 Тест: форк сам взяв нову версію, а Vercel її розгорнув"],
