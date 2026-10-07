@@ -10,6 +10,8 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+  # A copy made by Vercel's button has no .github folder: the bot's one-click file (bot/autoUpdate.ts) calls this one.
+  workflow_call:
 
 permissions:
   contents: write

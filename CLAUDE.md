@@ -166,6 +166,9 @@ webhook and redirects to the bot; `/api/health` shows the state.
   «Виправлено:»).
 - Updates: a deployed copy is the owner's GitHub copy connected to Vercel; its `.github/workflows/update.yml` (skipped in
   Mem341/aisecretary itself) takes the new `main` every 5 minutes once its tests pass — no token, no secret; keep it that way.
+  Vercel's «Deploy» button copies without `.github`: `bot/autoUpdate.ts` sends the owner once (`OwnerSettings.au`) a button
+  to GitHub's new-file page with a small workflow (`UPDATE_CALLER`, every 30 min) that calls this `update.yml`
+  (`workflow_call`) — one «Commit changes».
   `.github/workflows/wake.yml` opens the bot's `/api/setup` the moment Vercel reports a successful production deploy
   (`deployment_status`), so «🆕 Бот оновлено» comes at once: it derives the production address from the deploy's own
   («<project>-<team>.vercel.app», «<project>.vercel.app», or the repo variable `BOT_URL`) and wakes only the one whose
