@@ -18,6 +18,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    v: 48,
+    date: "2026-10-07",
+    changed: ["🧪 Тест: ПРИВЕТ АНДРЕЙ"],
+  },
+  {
     v: 47,
     date: "2026-10-07",
     added: ["🔄 Бот сам оновлює свій форк на GitHub, якщо у Vercel додано ключ GITHUB_TOKEN — нові версії приходять без розкладу GitHub і без ручних кнопок"],
