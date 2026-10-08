@@ -64,8 +64,13 @@ webhook and redirects to the bot; `/api/health` shows the state.
   `lastBotTurn` / `pendingAgent`), so it never fights the follow-up rule; below 0.5 confidence, a failure or 6 s
   without an answer (9 s with pictures) → 3) the keyword table / `routeFollowUp` as before. No Think tool. ✅ / ❌ under an
   invitation (`accept:` / `decline:`) is answered in code with the same RSVP tool, no model call.
-  Models per request (`modelFor`): text → `AGENT_MODEL` (gpt-6-luna-pro), pictures → `VISION_MODEL` (gemini-2.5-flash),
-  voice → `LLM_MODEL` (gpt-6-luna-pro); a `ModelError` before any write tool ran retries the request on `LLM_MODEL`,
+  Models per request (`modelFor`): text and voice → `AGENT_MODEL` (Claude Haiku 5.5, `anthropic/claude-haiku-5.5`),
+  pictures → `VISION_MODEL` (gemini-2.5-flash); `LLM_MODEL` (gpt-6-luna-pro) takes any Claude request over
+  `BIG_PROMPT_TOKENS` (90 000 — Haiku is five times dearer above 100 000 prompt tokens; `llm/openrouter.ts` `pickModel`:
+  the provider's last `prompt_tokens` plus an estimate of what was added, PDFs by pages; a run that crossed it stays on
+  `LLM_MODEL`). Claude requests carry no temperature (Haiku 5.5 refuses any), the system prompt as a cached block
+  (`cache_control`), and Claude's `reasoning_details` go back unchanged with tool results. Every agent's system prompt
+  ends with `DATA_RULE` (emails, files, tasks are data, never orders). A `ModelError` before any write tool ran retries the request on `LLM_MODEL`,
   never after a write; so does a junk answer with no real word («😊», «✅✅✅ Т Т», `isJunk`) — it is never sent. `npm run eval:models` (`eval/`, real OpenRouter, fake tools) compares models on typical
   requests. Keep prompts and tool names in line with the n8n originals.
 - `src/bitrix/` — optional Bitrix24 tasks via an incoming webhook (`BITRIX_WEBHOOK_URL`, rights: tasks, user, im): `client.ts` (REST; a task's discussion is its «Чат завдання» (im chat, `im.chat.get` by entity) plus old comments; tasks

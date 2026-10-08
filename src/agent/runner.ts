@@ -1,7 +1,7 @@
 import { cutText } from "../lib/text";
 import type { Env } from "../env";
 import { GoogleAuthRevokedError } from "../google/oauth";
-import { type AgentMessage, type ChatMessage, chatWithTools, type ContentPart, type TokenUsage, type ToolSpec } from "../llm/openrouter";
+import { type AgentMessage, type ChatMessage, chatWithTools, type ContentPart, estimateTokens, type TokenUsage, type ToolSpec } from "../llm/openrouter";
 
 /** A tool an agent may call (an n8n "…Tool" node). */
 export interface Tool {
@@ -55,21 +55,30 @@ export async function runAgent(env: Env, run: AgentRun): Promise<string> {
   const byName = new Map(run.tools.map((t) => [t.spec.name, t]));
   const messages: AgentMessage[] = [{ role: "system", content: run.system }, ...run.history, { role: "user", content: run.input }];
   let last = "";
+  // The model of this run: once a step went over the big-prompt line (to LLM_MODEL), the rest stays there.
+  let model = run.model;
+  // The prompt size the provider reported for the last step, and how many messages it covered.
+  let known: { tokens: number; upTo: number } | undefined;
   for (let i = 0; i < run.maxIterations; i++) {
     // No new step once the time for steps is over: the rest goes on in a fresh invocation.
     if (run.deadline && Date.now() > run.deadline) throw new OutOfTime();
     const left = run.hardDeadline ? run.hardDeadline - Date.now() : 0;
     const signal = run.hardDeadline ? AbortSignal.timeout(Math.max(1000, left)) : undefined;
-    const turn = await chatWithTools(env, run.model, messages, run.tools.map((t) => t.spec), run.temperature, signal).catch((err: unknown) => {
+    // Exact for what was sent before, an estimate for what was added since (the model's reply, tool results).
+    const promptTokens = known ? known.tokens + estimateTokens(messages.slice(known.upTo)) : undefined;
+    const turn = await chatWithTools(env, model, messages, run.tools.map((t) => t.spec), run.temperature, signal, promptTokens).catch((err: unknown) => {
       if (signal?.aborted) throw new OutOfTime();
-      throw new ModelError(`${run.model}: ${err instanceof Error ? err.message : String(err)}`);
+      throw new ModelError(`${model}: ${err instanceof Error ? err.message : String(err)}`);
     });
+    if (turn.model !== model) console.log(`agent: prompt over ${model}'s cheap range, continuing on ${turn.model}`);
+    model = turn.model;
+    if (turn.usage?.prompt_tokens) known = { tokens: turn.usage.prompt_tokens, upTo: messages.length };
     if (turn.usage) run.onUsage?.(turn.usage);
     last = turn.content;
     if (!turn.toolCalls.length) return turn.content;
     // Arguments that are not valid JSON (a model cut off mid-call) would make the next request invalid too: kept as {}.
     const calls = turn.toolCalls.map((c) => (validJson(c.function.arguments) ? c : { ...c, function: { ...c.function, arguments: "{}" } }));
-    messages.push({ role: "assistant", content: turn.content || null, tool_calls: calls });
+    messages.push({ role: "assistant", content: turn.content || null, tool_calls: calls, ...(turn.reasoningDetails ? { reasoning_details: turn.reasoningDetails } : {}) });
     for (const call of turn.toolCalls) {
       let result: unknown;
       const tool = byName.get(call.function.name);
@@ -91,7 +100,7 @@ export async function runAgent(env: Env, run: AgentRun): Promise<string> {
     }
   }
   if (last) return last;
-  throw new ModelError(`${run.model}: no answer after ${run.maxIterations} steps`);
+  throw new ModelError(`${model}: no answer after ${run.maxIterations} steps`);
 }
 
 function validJson(s: string | undefined): boolean {

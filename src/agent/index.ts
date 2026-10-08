@@ -10,7 +10,7 @@ import { calendarTools } from "./calendarTools";
 import { gmailTools } from "./gmailTools";
 import { toTelegramHtml } from "./html";
 import { conversationBlock, conversationHistory, factsBlock, lastBotTurn, loadMemory, memoryTools, pendingAgent, rememberTurn, saveMemory } from "./memory";
-import { bitrixPrompt, calendarPrompt, docsPrompt, gmailPrompt, notesPrompt, supervisorPrompt } from "./prompts";
+import { bitrixPrompt, calendarPrompt, DATA_RULE, docsPrompt, gmailPrompt, notesPrompt, supervisorPrompt } from "./prompts";
 import { notesTools } from "./notesTools";
 import { peopleTools } from "./peopleTools";
 import { docsTools } from "./docsTools";
@@ -236,12 +236,11 @@ function tracking(ctx: RunContext) {
 }
 
 /**
- * Which model serves a request: pictures → VISION_MODEL (sees images), voice → LLM_MODEL (spoken requests are
- * messy), plain text → AGENT_MODEL (cheap). LLM_MODEL is also the second try when the cheap one fails.
+ * Which model serves a request: pictures → VISION_MODEL (sees images), text and voice (already transcribed) →
+ * AGENT_MODEL. LLM_MODEL is the second try when it fails, and takes a prompt too big for its cheap range (runner.ts).
  */
 export function modelFor(env: Env, input: AgentInput): string {
   if (input.images?.length) return env.VISION_MODEL;
-  if (input.inputType === "voice") return env.LLM_MODEL;
   return env.AGENT_MODEL;
 }
 
@@ -257,7 +256,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       model: ctx.model,
       onTool: tracking(ctx),
       ...limits(ctx, name),
-      system: docsPrompt(await loadOwner(env), now) + noDrive + factsBlock() + conversationBlock(),
+      system: docsPrompt(await loadOwner(env), now) + noDrive + factsBlock() + conversationBlock() + DATA_RULE,
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
       tools: guarded([...(drive ? docsTools(env) : []), ...memoryTools], ctx.approved === true),
@@ -273,7 +272,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       model: ctx.model,
       onTool: tracking(ctx),
       ...limits(ctx, name),
-      system: notesPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock(),
+      system: notesPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock() + DATA_RULE,
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
       tools: guarded([...notesTools(env), ...memoryTools], ctx.approved === true),
@@ -287,7 +286,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
       model: ctx.model,
       onTool: tracking(ctx),
       ...limits(ctx, name),
-      system: bitrixPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock(),
+      system: bitrixPrompt(await loadOwner(env), now) + factsBlock() + conversationBlock() + DATA_RULE,
       history: conversationHistory(),
       input: withImages(userMessage, input.images),
       tools: guarded([...bitrixTools(env, ctx.preview), ...memoryTools], ctx.approved === true),
@@ -308,7 +307,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
           onTool: tracking(ctx),
           ...limits(ctx, name),
       ...limits(ctx, name),
-          system: calendarPrompt(owner, await loadDirectory(env), now) + factsBlock() + conversationBlock(),
+          system: calendarPrompt(owner, await loadDirectory(env), now) + factsBlock() + conversationBlock() + DATA_RULE,
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
           tools: guarded([...calendarTools(env, owner.email, { currentText: input.text, freeBusyScope: await hasFreeBusyScope(env) }), ...peopleTools(env), ...memoryTools], ctx.approved === true),
@@ -319,7 +318,7 @@ async function runSubAgent(env: Env, name: AgentName, userMessage: string, input
           onTool: tracking(ctx),
           ...limits(ctx, name),
       ...limits(ctx, name),
-          system: gmailPrompt(await loadDirectory(env).catch(() => [])) + factsBlock() + conversationBlock(),
+          system: gmailPrompt(await loadDirectory(env).catch(() => []), now) + factsBlock() + conversationBlock() + DATA_RULE,
           history: conversationHistory(),
           input: withImages(userMessage, input.images),
           tools: guarded([...gmailTools(env), ...peopleTools(env), ...memoryTools], ctx.approved === true),
@@ -381,7 +380,7 @@ export async function runSupervisor(env: Env, input: AgentInput, ctx: RunContext
   const output = await runAgent(env, {
     model: ctx.model,
     ...limits(ctx, "supervisor"),
-    system: supervisorPrompt(bitrixConfigured(env)) + factsBlock() + conversationBlock(),
+    system: supervisorPrompt(bitrixConfigured(env), now) + factsBlock() + conversationBlock() + DATA_RULE,
     history: conversationHistory(),
     input: withImages(chatInput, input.images),
     tools: [

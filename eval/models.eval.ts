@@ -19,7 +19,7 @@ import { toKyivDate } from "../src/lib/time";
  * Results: printed and saved to eval/results.md.
  */
 
-const MODELS = (process.env.EVAL_MODELS ?? "qwen/qwen3.8-flash,openai/gpt-oss-120b,qwen/qwen3.7-flash,inception/mercury-2.5,openai/gpt-6-luna-pro")
+const MODELS = (process.env.EVAL_MODELS ?? "anthropic/claude-haiku-5.5,openai/gpt-6-luna-pro")
   .split(",")
   .map((m) => m.trim())
   .filter(Boolean);

@@ -119,9 +119,9 @@ Drive. Голосові розпізнає той самий OpenRouter.
 | `OWNER_NAME` | ваше імʼя для агентів (інакше — з Telegram) |
 | `DEFAULT_DURATION_MIN` | тривалість зустрічі за замовчуванням (60) |
 | `REMINDER_MINUTES` | нагадування до першого вибору в `/settings` → ⏰ (`30,10`) |
-| `AGENT_MODEL` | текстові запити; типова — `openai/gpt-6-luna-pro` |
+| `AGENT_MODEL` | текстові й голосові запити; типова — `anthropic/claude-haiku-5.5` |
 | `VISION_MODEL` | запити з картинками; типова — `google/gemini-2.5-flash` |
-| `LLM_MODEL` | голосові й повторна спроба; типова — `openai/gpt-6-luna-pro` |
+| `LLM_MODEL` | повторна спроба й дуже великі запити (понад 100 000 токенів); типова — `openai/gpt-6-luna-pro` |
 | `BITRIX_WEBHOOK_URL`, `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | те саме, що §5–6, але змінною |
 | `GMAIL_PUBSUB_TOPIC` | власний топік Pub/Sub замість створеного ботом |
 | `ENCRYPTION_KEY` | власний ключ шифрування (інакше — з токена бота) |

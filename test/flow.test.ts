@@ -526,8 +526,8 @@ describe("voice", () => {
     expect(audio).toEqual({ data: Buffer.from([1, 2, 3]).toString("base64"), format: "ogg" });
     expect(tgCalls(calls, "sendMessage").some((m) => String(m.text).includes("🎙 <i>привіт, як справи</i>"))).toBe(true);
     expect(lastContent(seen[0]!)).toContain("USER: привіт, як справи");
-    // Spoken requests go to the strong model.
-    expect(seen[0]!.model).toBe("test/strong-model");
+    // Spoken requests, once transcribed, go to the main model like text.
+    expect(seen[0]!.model).toBe("test/agent-model");
     expect(lastContent(seen[0]!)).toContain("inputType: voice");
   });
 });

@@ -11,10 +11,10 @@ export interface Config {
   OWNER_TELEGRAM_ID: number;
   /** Public https URL of the deployment, no trailing slash (OAuth redirect, Google push, Telegram webhook). */
   PUBLIC_URL: string;
-  /** The strong model: voice requests, and a second try when a cheaper model fails. */
+  /** The strong model: a second try when the main one fails, and prompts too big for Claude Haiku's cheap range. */
   LLM_MODEL: string;
   LLM_MODEL_SUMMARY: string;
-  /** Text requests: the Supervisor and the Calendar / Gmail agents (cheap, tool calling). */
+  /** Text and voice requests: the Supervisor and every agent (Claude Haiku 5.5, tool calling). */
   AGENT_MODEL: string;
   /** Requests with pictures (screenshots, photos): a cheap model that sees images. */
   VISION_MODEL: string;
@@ -87,7 +87,8 @@ export function reminderMinutes(value: string): number[] {
 export const DEFAULT_LLM_MODEL = "openai/gpt-6-luna-pro";
 export const DEFAULT_LLM_MODEL_SUMMARY = "openai/gpt-6-luna-pro";
 // OpenAI models on OpenRouter take audio only as wav/mp3; Telegram voice notes are OGG/Opus, which Gemini accepts.
-export const DEFAULT_AGENT_MODEL = "openai/gpt-6-luna-pro";
+// Text and voice requests: Claude Haiku 5.5 (cheap up to 100 000 prompt tokens; bigger prompts go to LLM_MODEL).
+export const DEFAULT_AGENT_MODEL = "anthropic/claude-haiku-5.5";
 export const DEFAULT_VISION_MODEL = "google/gemini-2.5-flash";
 export const DEFAULT_ROUTER_MODEL = "cloudflare/clef-flash";
 export const DEFAULT_STT_MODEL = "google/gemini-2.5-flash";
