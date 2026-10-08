@@ -64,7 +64,7 @@ describe("sendReminders (no AI: calendar → Telegram)", () => {
     const { env } = testEnv();
 
     expect(await sendReminders(env, now)).toBe(1);
-    expect(String(tgCalls(calls, "sendMessage")[0]!.text)).toContain("⏰ <b>Через 28 хв:</b> Стендап");
+    expect(String(tgCalls(calls, "sendMessage")[0]!.text)).toContain("⏰ <b>Через 28 хв</b> — <b>Стендап</b>");
     expect(readHidden(lastBotMessage("Через 28 хв"))).toEqual({ k: "ev", id: "m1" });
     expect(writes.at(-1)!.aisReminded).toBe(`${start}:30`);
 
@@ -136,7 +136,7 @@ describe("the 5-minute pinger with the owner's four reminder times", () => {
     vi.useRealTimers();
     expect(sentAt).toEqual([60, 30, 10, 5]);
     const texts = tgCalls(calls, "sendMessage").map((m) => String(m.text)).filter((t) => t.includes("⏰"));
-    expect(texts.map((t) => /Через (\d+) хв/.exec(t)![1])).toEqual(["60", "30", "10", "5"]);
+    expect(texts.map((t) => /Через ([^<]+)</.exec(t)![1])).toEqual(["1 год", "30 хв", "10 хв", "5 хв"]);
     expect(lastBody).toMatchObject({ ok: true, marks: [60, 30, 10, 5] });
   });
 });

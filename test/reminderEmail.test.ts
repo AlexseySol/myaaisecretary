@@ -92,7 +92,7 @@ describe("a meeting the owner has not accepted", () => {
     expect(sent()).toHaveLength(1);
     const ask = sent()[0]!;
     expect(ask.text).toContain("не підтвердили");
-    expect(ask.text).not.toContain("Через 30 хв:");
+    expect(ask.text).not.toContain("⏰");
     expect(JSON.stringify(tgCalls(g.calls, "sendMessage").at(-1)!.reply_markup)).toContain("accept:e1");
     expect(JSON.stringify(g.patches)).toContain("aisAsked");
   });

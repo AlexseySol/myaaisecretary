@@ -98,13 +98,33 @@ async function sendReminder(env: Env, cal: Calendar, tg: Telegram, ev: GEvent, m
   const props = ev.extendedProperties?.private ?? {};
   // Recurring instances are not marked (that would turn each into an exception); the instance memory covers them.
   if (!ev.recurringEventId && !(await cal.claimPrivate(ev, { ...props, [PROP_REMINDED]: `${m.start_at}:${mark}` }))) return false;
-  const minutes = Math.max(1, Math.round((m.start_at - now) / MINUTE));
-  const lines = [`⏰ <b>Через ${minutes} хв:</b> ${esc(m.title ?? "зустріч")}`, esc(formatRange(new Date(m.start_at), new Date(m.end_at)))];
-  if (m.meet_url) lines.push(`🔗 ${esc(m.meet_url)}`);
-  else if (m.location) lines.push(`📍 ${esc(m.location)}`);
-  if (m.attendees.length) lines.push(`👥 ${m.attendees.map((a) => esc(a.name ?? a.email)).join(", ")}`);
-  await tg.send(env.OWNER_TELEGRAM_ID, hiddenData({ k: "ev", id: ev.id } satisfies EventRef) + lines.join("\n"));
+  const text = `⏰ <b>Через ${inTime(m.start_at - now)}</b> — <b>${esc(m.title ?? "зустріч")}</b>\n\n${meetingCard(m)}`;
+  await tg.send(env.OWNER_TELEGRAM_ID, hiddenData({ k: "ev", id: ev.id } satisfies EventRef) + text);
   return true;
+}
+
+/** «28 хв», «1 год», «1 год 20 хв». */
+function inTime(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / MINUTE));
+  if (minutes < 60) return `${minutes} хв`;
+  const h = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${h} год ${rest} хв` : `${h} год`;
+}
+
+const SHOWN_GUESTS = 4;
+
+/** When, where (a tappable Meet / Zoom link) and who — the body of a reminder. */
+function meetingCard(m: Meeting): string {
+  const lines = [`🕒 ${esc(formatRange(new Date(m.start_at), new Date(m.end_at)))}`];
+  if (m.meet_url) lines.push(`🎥 <a href="${esc(m.meet_url)}">${/zoom\./i.test(m.meet_url) ? "Приєднатися в Zoom" : "Приєднатися в Google Meet"}</a>`);
+  if (m.location) lines.push(`📍 ${esc(m.location)}`);
+  if (m.attendees.length) {
+    const names = m.attendees.slice(0, SHOWN_GUESTS).map((a) => esc(a.name ?? a.email));
+    const more = m.attendees.length - SHOWN_GUESTS;
+    lines.push(`👥 ${names.join(", ")}${more > 0 ? ` і ще ${more}` : ""}`);
+  }
+  return lines.join("\n");
 }
 
 /**
@@ -116,16 +136,11 @@ async function askToAnswer(env: Env, cal: Calendar, tg: Telegram, ev: GEvent, m:
   const props = ev.extendedProperties?.private ?? {};
   if (props[PROP_ASKED] === String(m.start_at)) return false;
   if (!ev.recurringEventId && !(await cal.claimPrivate(ev, { ...props, [PROP_ASKED]: String(m.start_at) }))) return false;
-  const minutes = Math.max(1, Math.round((m.start_at - now) / MINUTE));
-  const lines = [
-    `❓ <b>Ви не підтвердили зустріч, що через ${minutes} хв:</b> ${esc(m.title ?? "зустріч")}`,
-    esc(formatRange(new Date(m.start_at), new Date(m.end_at))),
-  ];
-  if (m.meet_url) lines.push(`🔗 ${esc(m.meet_url)}`);
-  else if (m.location) lines.push(`📍 ${esc(m.location)}`);
-  lines.push("", "Нагадування прийдуть, коли приймете.");
+  const text =
+    `❓ <b>Через ${inTime(m.start_at - now)}</b> — <b>${esc(m.title ?? "зустріч")}</b>\n` +
+    `Ви ще не підтвердили цю зустріч.\n\n${meetingCard(m)}\n\n<i>Нагадування прийдуть, коли приймете.</i>`;
   const keyboard = invitationButtons(ev.id);
-  await tg.send(env.OWNER_TELEGRAM_ID, hiddenData({ k: "ev", id: ev.id } satisfies EventRef) + lines.join("\n"), keyboard ? { keyboard } : {});
+  await tg.send(env.OWNER_TELEGRAM_ID, hiddenData({ k: "ev", id: ev.id } satisfies EventRef) + text, keyboard ? { keyboard } : {});
   return true;
 }
 

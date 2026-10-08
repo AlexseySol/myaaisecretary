@@ -185,7 +185,7 @@ describe("Google as the bot's clock (no cron, no outside service)", () => {
     const { env } = testEnv();
     await saveOwnerSettings(env, { r: [30, 10] });
     await gmailSync(env);
-    expect(lastBotMessage("⏰").text).toContain("Через 30 хв:</b> Планування");
+    expect(lastBotMessage("⏰").text).toContain("Через 30 хв</b> — <b>Планування");
     expect(tgCalls(calls, "sendMessage").some((m) => String(m.text).includes("Нова пошта"))).toBe(false);
     expect(trashed).toBe(true);
   });
@@ -310,7 +310,7 @@ describe("a signal from the bot's calendar", () => {
       },
     } as never;
     expect(await handleReminderEmail(env, email)).toBe(true);
-    expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("Через 10 хв:</b> Стендап");
+    expect(String(tgCalls(calls, "sendMessage").at(-1)!.text)).toContain("Через 10 хв</b> — <b>Стендап");
   });
 });
 
