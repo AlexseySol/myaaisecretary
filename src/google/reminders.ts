@@ -11,13 +11,18 @@ import { digestSignals, loadDigestChoice, sendDigestOnce } from "./digest";
 import { DIGEST_PREFIX, NOTE_PREFIX, type Signal, signalCalendar, signalEvent, syncSignals } from "./signals";
 import { sendNoteReminder } from "./notes";
 import { type GMessage, Gmail, toMailMessage } from "./gmail";
-import { type EventRef, eventToChange, listMeetings, type Meeting } from "./sync";
+import { type EventRef, eventToChange, invitationButtons, listMeetings, type Meeting } from "./sync";
 
 /**
  * Private event property: "start:minutes" of the last reminder sent (e.g. "1790000000000:10"). A moved meeting has
  * another start, so it is reminded again.
  */
 export const PROP_REMINDED = "aisReminded";
+/** An invitation the owner has not answered: asked once to answer it instead of a reminder («<start>»). */
+const PROP_ASKED = "aisAsked";
+
+/** The owner is a guest who has not answered the invitation yet. */
+const unanswered = (ev: GEvent) => !ev.organizer?.self && ev.attendees?.find((a) => a.self)?.responseStatus === "needsAction";
 
 /** A pinger every 5 minutes rarely hits the exact minute: a reminder may go out this much early. */
 const EARLY = 2 * MINUTE;
@@ -88,6 +93,7 @@ export async function checkReminders(env: Env, now = Date.now()): Promise<Remind
 
 /** One reminder, claimed first on the event so it goes out once whatever woke the bot (a reminder email, a check). */
 async function sendReminder(env: Env, cal: Calendar, tg: Telegram, ev: GEvent, m: Meeting, mark: number, now: number): Promise<boolean> {
+  if (unanswered(ev)) return askToAnswer(env, cal, tg, ev, m, now);
   if (!firstTime(`remind:${ev.id}:${m.start_at}:${mark}`, DAY)) return false;
   const props = ev.extendedProperties?.private ?? {};
   // Recurring instances are not marked (that would turn each into an exception); the instance memory covers them.
@@ -98,6 +104,28 @@ async function sendReminder(env: Env, cal: Calendar, tg: Telegram, ev: GEvent, m
   else if (m.location) lines.push(`📍 ${esc(m.location)}`);
   if (m.attendees.length) lines.push(`👥 ${m.attendees.map((a) => esc(a.name ?? a.email)).join(", ")}`);
   await tg.send(env.OWNER_TELEGRAM_ID, hiddenData({ k: "ev", id: ev.id } satisfies EventRef) + lines.join("\n"));
+  return true;
+}
+
+/**
+ * A meeting the owner has not accepted gets no reminder: once, at its first reminder time, the bot asks to answer it
+ * (✅ / ❌). Accepted, it gets its later reminders as usual; declined, none.
+ */
+async function askToAnswer(env: Env, cal: Calendar, tg: Telegram, ev: GEvent, m: Meeting, now: number): Promise<boolean> {
+  if (!firstTime(`ask:${ev.id}:${m.start_at}`, DAY)) return false;
+  const props = ev.extendedProperties?.private ?? {};
+  if (props[PROP_ASKED] === String(m.start_at)) return false;
+  if (!ev.recurringEventId && !(await cal.claimPrivate(ev, { ...props, [PROP_ASKED]: String(m.start_at) }))) return false;
+  const minutes = Math.max(1, Math.round((m.start_at - now) / MINUTE));
+  const lines = [
+    `❓ <b>Ви не підтвердили зустріч, що через ${minutes} хв:</b> ${esc(m.title ?? "зустріч")}`,
+    esc(formatRange(new Date(m.start_at), new Date(m.end_at))),
+  ];
+  if (m.meet_url) lines.push(`🔗 ${esc(m.meet_url)}`);
+  else if (m.location) lines.push(`📍 ${esc(m.location)}`);
+  lines.push("", "Нагадування прийдуть, коли приймете.");
+  const keyboard = invitationButtons(ev.id);
+  await tg.send(env.OWNER_TELEGRAM_ID, hiddenData({ k: "ev", id: ev.id } satisfies EventRef) + lines.join("\n"), keyboard ? { keyboard } : {});
   return true;
 }
 
@@ -211,6 +239,10 @@ function allText(part: GMessage["payload"]): string {
   return [own, ...(part.parts ?? []).map(allText)].join("\n");
 }
 
+/** Google's emails about an invitation itself (new, changed, cancelled, a guest's answer) — never a reminder. */
+const INVITATION_SUBJECT =
+  /^(invitation|updated invitation|new event|accepted|declined|tentatively accepted|canceled|cancelled|event canceled|запрошення|оновлене запрошення|нова подія|прийнято|відхилено|скасовано|приглашение|обновленное приглашение|новое мероприятие|принято|отклонено|отменено|отменённое мероприятие)(?=$|[\s:])/i;
+
 const REMINDER_SUBJECT = /^(notification|reminder|уведомление|напоминание|сповіщення|нагадування|powiadomienie|benachrichtigung)(?=$|[\s:])/i;
 
 /** The event id from a Google Calendar email: its links carry eid = base64("<event id> <calendar>"). */
@@ -251,15 +283,18 @@ export async function handleReminderEmail(env: Env, m: GMessage, now = Date.now(
   const cal = new Calendar(env);
   const ev = await cal.getEvent(target ?? id).catch(() => null);
   // The meeting's own email reminder (the bot put it there), a shadow's, or a reminder-looking subject.
-  const ownSignal = !!ev?.reminders?.overrides?.some((o) => o.method === "email");
-  if (!target && !ownSignal && !REMINDER_SUBJECT.test(mail.subject.trim())) return false;
+  // An invitation email (a change of time, a guest's answer) about such a meeting is mail, not a reminder.
+  const subject = mail.subject.trim();
+  const ownSignal = !!ev?.reminders?.overrides?.some((o) => o.method === "email") && !INVITATION_SUBJECT.test(subject);
+  if (!target && !ownSignal && !REMINDER_SUBJECT.test(subject)) return false;
   const change = ev ? eventToChange(ev) : null;
   if (ev && change?.kind === "upsert" && change.meeting.start_at > now - 5 * MINUTE) {
     const marks = await reminderMarks(env);
     const left = change.meeting.start_at - now;
-    // The mark this email stands for: the smallest chosen one not below the time left.
-    const mark = marks.filter((x) => left <= x * MINUTE + EARLY).sort((a, b) => a - b)[0] ?? Math.max(1, Math.round(left / MINUTE));
-    await sendReminder(env, cal, new Telegram(env), ev, change.meeting, mark, now);
+    // The mark this email stands for: the smallest chosen one not below the time left. None — it is not one of the
+    // owner's reminder times (hours ahead): no Telegram reminder for it.
+    const mark = marks.filter((x) => left <= x * MINUTE + EARLY).sort((a, b) => a - b)[0];
+    if (mark !== undefined) await sendReminder(env, cal, new Telegram(env), ev, change.meeting, mark, now);
   }
   await gmail.trash(m.id).catch(() => undefined);
   return true;
