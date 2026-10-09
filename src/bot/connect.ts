@@ -120,7 +120,15 @@ export async function handleConnectAnswer(env: Env, msg: TgMessage, text: string
     resetBitrixCache();
     await applyIntegrations(env);
     await refreshCommands(env);
-    await tg.send(msg.chat.id, `✅ <b>Bitrix24 підключено</b>${who ? ` — ${esc(who)}` : ""}.\n\nСпробуйте /bitrix або напишіть «мої задачі».`);
+    // The optional right: with it the bot also knows the company structure (/team).
+    const structure = have ? have.includes("department") : null;
+    const extra =
+      structure === true
+        ? "\n🏢 Структура компанії теж доступна — /team."
+        : structure === false
+          ? "\n\n💡 Щоб я бачив відділи й керівників (/team), додайте вебхуку право <b>«Структура компанії»</b> — адреса лишиться та сама."
+          : "";
+    await tg.send(msg.chat.id, `✅ <b>Bitrix24 підключено</b>${who ? ` — ${esc(who)}` : ""}.\n\nСпробуйте /bitrix або напишіть «мої задачі».${extra}`);
     return true;
   }
 

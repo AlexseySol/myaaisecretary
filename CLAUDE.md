@@ -84,14 +84,18 @@ webhook and redirects to the bot; `/api/health` shows the state.
   (`COMMENTS_UNTIL_MS`, `AI_UNTIL_MS`) so the report always fits Vercel's 60 s; `list_tasks` returns all matching
   tasks, but above 30 with no period it returns `needScope` and the agent asks «all or for a period?»; a task's whole
   chat is read, page by page by LAST_ID),
-  `menu.ts` (/bitrix buttons `bx:…`, no AI; «📊 Excel-звіт» first asks what to export, `REPORT_SCOPES`). The `bitrix_agent` (`agent/bitrixTools.ts`, `bitrixPrompt`) joins the
+  `menu.ts` (/bitrix buttons `bx:…`, no AI; «📊 Excel-звіт» first asks what to export, `REPORT_SCOPES`), `structure.ts`
+  (the company structure, read only via `department.get` — the optional webhook right «department», `BITRIX_OPTIONAL`;
+  without it everything works as before: /team and «🏢 Структура компанії» show the tree, a department and a person's
+  card with buttons `bx:dep:<id>` / `bx:who:<id>` / `bx:wt:<id>` edited in place, no AI; the agent's `company_structure`
+  tool and `find_user`'s departments / manager; the report's «Відділ» column and per-department analytics). The `bitrix_agent` (`agent/bitrixTools.ts`, `bitrixPrompt`) joins the
   Supervisor and `route.ts` when it is configured. `lib/xlsx.ts` writes .xlsx without dependencies.
 - `src/bot/` — `onboarding.ts` (/start: first the tour «Що я вмію» with «⚙️ Налаштувати», nothing pinned yet; /help),
   `tabs.ts` (/settings tabs 🔗 Google / 📋 Bitrix24 / 🎥 Zoom: the step the owner is on — Google: 1) the client file,
   2) «Увійти в Google» — with the video and the one button that step needs), `settings.ts` (/settings: what is connected, reminder times and the
   morning list chosen with `set:…` buttons, no AI), `owner.ts` (profile from Telegram/Google/env),
   `contacts.ts` (names → emails from calendar attendees), `guides.ts` («📖 Інструкції» in /help and /settings: Google
-  APIs and setup, Telegram, Bitrix24; the owner adds a video by replying to a guide with it, kept in `OwnerSettings.gv`). `notesMenu.ts` (/notes and /settings → «📒 Нотатки»: lists without AI, the sheet's link, the report's notes block, buttons `nm:…`; `ensureNotesSheet` makes the sheet right after an update — the news job — daily and on connect, so the owner is told at once). Commands: /start /settings /notes /bitrix /reset /help; everything else
+  APIs and setup, Telegram, Bitrix24; the owner adds a video by replying to a guide with it, kept in `OwnerSettings.gv`). `notesMenu.ts` (/notes and /settings → «📒 Нотатки»: lists without AI, the sheet's link, the report's notes block, buttons `nm:…`; `ensureNotesSheet` makes the sheet right after an update — the news job — daily and on connect, so the owner is told at once). Commands: /start /settings /notes /bitrix /team /reset /help; everything else
   goes to the agents.
 - `src/google/` — OAuth (grant in a pinned message), Calendar API + push notices (`sync.ts`: n8n invitation
   format with `accept:{id}` / `decline:{id}` buttons; push channel ids are unique per bot and day — Google requires them

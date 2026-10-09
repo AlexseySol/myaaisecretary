@@ -1,3 +1,4 @@
+import { departmentNames, loadCompany } from "./structure";
 import type { Env } from "../env";
 import { buildXlsx, type Cell } from "../lib/xlsx";
 import { chatJson } from "../llm/openrouter";
@@ -96,6 +97,22 @@ function byImportance(tasks: BxTask[], now: number): BxTask[] {
   return [...tasks].sort((a, b) => rank(a) - rank(b) || due(a) - due(b));
 }
 
+/** Open, overdue and closed tasks per department of the responsible person. */
+function byDepartment(tasks: BxTask[], department: (t: BxTask) => string, now: number): Cell[][] {
+  const by = new Map<string, { active: number; overdue: number; closed: number }>();
+  for (const t of tasks) {
+    const d = department(t) || "Без відділу";
+    const row = by.get(d) ?? { active: 0, overdue: 0, closed: 0 };
+    if (CLOSED.has(String(t.status))) row.closed++;
+    else {
+      row.active++;
+      if (isOverdue(t, now)) row.overdue++;
+    }
+    by.set(d, row);
+  }
+  return [...by].sort((a, b) => b[1].overdue - a[1].overdue || b[1].active - a[1].active).map(([d, r]): Cell[] => [d, r.active, r.overdue, r.closed]);
+}
+
 /** The report of the chosen tasks; null when there are none. */
 export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportScope = "all"): Promise<TaskReport | null> {
   const began = Date.now();
@@ -137,8 +154,14 @@ export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportS
   const name = async (t: BxTask, who: "responsible" | "creator") =>
     who === "responsible" ? t.responsible?.name || (await bx.personName(t.responsibleId)) : t.creator?.name || (await bx.personName(t.createdBy));
 
+  // With the company structure: the responsible person's department, in a column and in the analytics.
+  const company = await loadCompany(bx).catch(() => null);
+  const department = (t: BxTask) => {
+    const p = company?.people.find((x) => String(x.id) === String(t.responsibleId ?? t.responsible?.id));
+    return company && p ? departmentNames(company, p).join(", ") : "";
+  };
   const header: Cell[] = [
-    "ID", "Задача", "Проєкт", "Стадія", "Статус у Bitrix24", "Стан за коментарями", "Відповідальний", "Постановник",
+    "ID", "Задача", "Проєкт", "Стадія", "Статус у Bitrix24", "Стан за коментарями", "Відповідальний", ...(company ? ["Відділ"] : []), "Постановник",
     "Поставлено", "Дедлайн", "Прострочено", "Останній коментар", "Посилання",
   ];
   const rows: Cell[][] = [header];
@@ -155,6 +178,7 @@ export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportS
       STATUS[String(t.status)] ?? String(t.status),
       state[t.id] || (!(t.id in comments) ? "Не встиг прочитати (задач багато)" : comments[t.id]!.length ? "" : "Коментарів немає"),
       await name(t, "responsible"),
+      ...(company ? [department(t)] : []),
       await name(t, "creator"),
       kyivDateTime(t.createdDate, false),
       kyivDateTime(t.deadline),
@@ -197,6 +221,7 @@ export async function buildTaskReport(env: Env, now = Date.now(), scope: ReportS
     ["", "", "", ""],
     ["Відповідальний", "Відкрито", "Прострочено", "Закрито за 30 днів"],
     ...[...byPerson].sort((a, b) => b[1].overdue - a[1].overdue || b[1].active - a[1].active).map(([p, r]): Cell[] => [p, r.active, r.overdue, r.closed]),
+    ...(company ? [["", "", "", ""], ["Відділ", "Відкрито", "Прострочено", "Закрито за 30 днів"], ...byDepartment(tasks, department, now)] : []),
   ];
 
   const file = buildXlsx([

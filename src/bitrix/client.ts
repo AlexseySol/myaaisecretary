@@ -114,12 +114,14 @@ export function phpQuery(value: unknown, prefix = ""): string {
 /** A task's own chat (its discussion): written to only as a comment to the task. */
 const TASK_CHAT = /^TASKS?/i;
 
+let departmentsCache: { at: number; list: Department[] | null } | null = null;
 let peopleCache: { at: number; list: Person[] } | null = null;
 let meCache: Person | null = null;
 const stagesCache = new Map<string, Record<string, string>>();
 
 export function resetBitrixCache(): void {
   peopleCache = null;
+  departmentsCache = null;
   meCache = null;
   stagesCache.clear();
 }
@@ -202,6 +204,37 @@ export class Bitrix {
       start = next;
     }
     peopleCache = { at: Date.now(), list };
+    return list;
+  }
+
+  /**
+   * The company structure, cached for 10 minutes; null when the webhook has no «Структура компанії» right (or the
+   * portal does not answer) — then the bot works as before, without departments.
+   */
+  async departments(): Promise<Department[] | null> {
+    if (departmentsCache && Date.now() - departmentsCache.at < 10 * 60_000) return departmentsCache.list;
+    let list: Department[] | null = [];
+    try {
+      let start = 0;
+      for (let page = 0; page < 40; page++) {
+        const { result, next } = await this.call<Record<string, unknown>[]>("department.get", { sort: "SORT", order: "ASC", start });
+        list.push(
+          ...result.map((d) => ({
+            id: Number(d.ID),
+            name: String(d.NAME ?? "").trim() || `#${d.ID}`,
+            ...(Number(d.PARENT) > 0 ? { parent: Number(d.PARENT) } : {}),
+            ...(Number(d.UF_HEAD) > 0 ? { headId: Number(d.UF_HEAD) } : {}),
+            sort: Number(d.SORT ?? 500),
+          })),
+        );
+        if (!next) break;
+        start = next;
+      }
+    } catch (err) {
+      console.warn("bitrix: no company structure:", err instanceof Error ? err.message : err);
+      list = null;
+    }
+    departmentsCache = { at: Date.now(), list };
     return list;
   }
 
@@ -472,9 +505,22 @@ export function toPerson(u: Record<string, unknown>): Person {
     secondName: u.SECOND_NAME ? String(u.SECOND_NAME) : undefined,
     email: emails[0]?.email,
     position: u.WORK_POSITION ? String(u.WORK_POSITION) : undefined,
+    ...(departmentIds(u.UF_DEPARTMENT).length ? { departments: departmentIds(u.UF_DEPARTMENT) } : {}),
     ...(emails.length ? { emails } : {}),
     ...(Object.keys(profile).length ? { profile } : {}),
   };
+}
+
+const departmentIds = (v: unknown): number[] =>
+  (Array.isArray(v) ? v : v == null || v === "" ? [] : [v]).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+
+/** A department of the company structure (Bitrix24 «Структура компанії»). */
+export interface Department {
+  id: number;
+  name: string;
+  parent?: number;
+  headId?: number;
+  sort: number;
 }
 
 /**
@@ -496,6 +542,8 @@ export const BITRIX_READ = new Set([
   "im.dialog.get",
   "im.search.chat.list",
   "sonet_group.get",
+  // The company structure — read only (needs the optional «department» right).
+  "department.get",
 ]);
 const BITRIX_WRITE = new Set(["task.commentitem.add", "im.message.add", "tasks.task.add"]);
 /** The webhook rights the bot needs, in the words of Bitrix24's webhook form. */
@@ -504,6 +552,9 @@ export const BITRIX_NEEDED = [
   { scope: "user", name: "Користувачі", why: "знаходити людей та їхні email" },
   { scope: "im", name: "Чат і повідомлення", why: "читати «Чат завдання», писати в чати й особисті" },
 ] as const;
+
+/** Rights that add something but are not required: without them the bot works, only that part is missing. */
+export const BITRIX_OPTIONAL = [{ scope: "department", name: "Структура компанії", why: "відділи, керівники, хто де працює" }] as const;
 
 export function missingScopes(have: string[]): (typeof BITRIX_NEEDED)[number][] {
   return BITRIX_NEEDED.filter((n) => !have.includes(n.scope));

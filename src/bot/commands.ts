@@ -9,7 +9,12 @@ export function ownerCommands(env: Env): { command: string; description: string 
   return [
     { command: "start", description: "Почати / підключити Google" },
     { command: "notes", description: "📒 Нотатки й нагадування" },
-    ...(bitrixConfigured(env) ? [{ command: "bitrix", description: "📋 Задачі Bitrix24" }] : []),
+    ...(bitrixConfigured(env)
+      ? [
+          { command: "bitrix", description: "📋 Задачі Bitrix24" },
+          { command: "team", description: "🏢 Структура компанії" },
+        ]
+      : []),
     { command: "settings", description: "⚙️ Налаштування й підключення" },
     { command: "reset", description: "Почати розмову заново" },
     { command: "help", description: "Що вміє бот" },

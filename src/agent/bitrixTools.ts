@@ -1,3 +1,4 @@
+import { departmentNames, loadCompany, manager, structureForAgent } from "../bitrix/structure";
 import { Bitrix, type BxTask, STATUS } from "../bitrix/client";
 import { isOverdue, kyivDateTime, projectName } from "../bitrix/format";
 import { fullName, type Person } from "../bitrix/names";
@@ -131,16 +132,32 @@ export function bitrixTools(env: Env, preview?: string): Tool[] {
         parameters: object({ query: s("Name, surname or email exactly as the owner wrote it") }, ["query"]),
       },
       async run(a) {
-        const matches = await bx.findPeople(str(a, "query"));
+        const [matches, company] = await Promise.all([bx.findPeople(str(a, "query")), loadCompany(bx).catch(() => null)]);
         return matches.map((m) => ({
           id: m.person.id,
           name: fullName(m.person),
           position: m.person.position,
+          // From the company structure, when the webhook may read it: where the person works and whom they report to.
+          ...(company && departmentNames(company, m.person).length ? { departments: departmentNames(company, m.person) } : {}),
+          ...(company && manager(company, m.person) ? { manager: fullName(manager(company, m.person)!) } : {}),
           email: m.person.email,
           ...(m.person.emails && m.person.emails.length > 1 ? { allEmails: m.person.emails } : {}),
           ...(m.person.profile ? { profile: m.person.profile } : {}),
           full: m.full,
         }));
+      },
+    },
+    {
+      spec: {
+        name: "company_structure",
+        description:
+          "The company structure from Bitrix24: departments, their heads, who works where. No query — the whole tree (department, head, headcount, subdepartments); query — departments whose name contains it, with every person (id, name, position). Read only. For «хто керівник відділу…», «хто в команді…», «кому підпорядковується…», a task or message to «керівнику …».",
+        parameters: object({ query: s("Part of a department's name; empty for the whole company") }, []),
+      },
+      async run(a) {
+        const company = await loadCompany(bx);
+        if (!company) return { error: "Структура компанії недоступна: вебхуку Bitrix24 бракує права «Структура компанії» (department). Скажи власнику додати його у вебхук — адреса лишається та сама." };
+        return structureForAgent(company, str(a, "query"));
       },
     },
     {

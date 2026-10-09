@@ -8,7 +8,7 @@ import { buildTaskReport, REPORT_SCOPES, type ReportScope } from "./report";
 
 /** /bitrix: the task menu. Its buttons ("bx:…") work in plain code — no AI, nothing in Bitrix24 changes. */
 
-export type BitrixAction = "my" | "overdue" | "stats" | `report:${ReportScope}`;
+export type BitrixAction = "my" | "overdue" | "stats" | `report:${ReportScope}` | `wt:${number}`;
 
 /** «📊 Excel-звіт»: first what to put in it. */
 export async function showReportMenu(env: Env, chatId: number): Promise<void> {
@@ -27,6 +27,7 @@ const MENU: InlineKeyboard = [
     { text: "📈 Аналітика", callback_data: "bx:stats" },
     { text: "📊 Excel-звіт", callback_data: "bx:report" },
   ],
+  [{ text: "🏢 Структура компанії", callback_data: "bx:dep:0" }],
 ];
 
 export async function showBitrixMenu(env: Env, chatId: number): Promise<void> {
@@ -100,6 +101,20 @@ export async function runBitrixAction(env: Env, chatId: number, action: BitrixAc
     return;
   }
   const active = ["1", "2", "3", "4", "6"];
+  // «📋 Задачі» on a person's card in the structure: their open tasks.
+  if (action.startsWith("wt:")) {
+    const id = Number(action.slice(3));
+    const tasks = await bx.tasks({ RESPONSIBLE_ID: id, REAL_STATUS: active }, 20);
+    const who = esc(await bx.personName(id));
+    await tg.send(
+      chatId,
+      tasks.length
+        ? `📋 <b>Відкриті задачі: ${who}</b> (${tasks.length}${tasks.length === 20 ? "+" : ""})\n\n${tasks.map((t) => taskLine(bx, t, me.id)).join("\n\n")}`
+        : `У ${who} немає відкритих задач.`,
+      { keyboard: [[{ text: "⬅️ Картка", callback_data: `bx:who:${id}` }]] },
+    );
+    return;
+  }
   const filter: Record<string, unknown> =
     action === "overdue" ? { MEMBER: me.id, REAL_STATUS: active, "<DEADLINE": new Date().toISOString() } : { MEMBER: me.id, REAL_STATUS: active };
   const tasks = await bx.tasks(filter, 20);

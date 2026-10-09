@@ -5,10 +5,11 @@ import { handleConnectAnswer } from "../bot/connect";
 import { handleSettingsButton, showSettings } from "../bot/settings";
 import { applyIntegrations } from "../integrations";
 import { type BitrixAction, showBitrixMenu, showReportMenu } from "../bitrix/menu";
+import { showStructure } from "../bitrix/structure";
 import { askGoogleClient, handleGoogleClientFile } from "../bot/googleClient";
 import { type Guide, handleGuideReply, showGuide, showGuideMenu } from "../bot/guides";
 import { loadOwner, type User } from "../bot/owner";
-import { googleConfigured, isOwner, type Env } from "../env";
+import { bitrixConfigured, googleConfigured, isOwner, type Env } from "../env";
 import { connectWithCode } from "../google/connect";
 import { connectLink, hasGoogleAuth, parseGoogleAnswer, verifyState } from "../google/oauth";
 import { formatTime, toKyivDate } from "../lib/time";
@@ -174,6 +175,11 @@ async function handleCommand(env: Env, user: User, text: string): Promise<boolea
     case "/notes":
       await showNotes(env, user.tg_id);
       return true;
+    case "/team":
+    case "/structure":
+      if (!bitrixConfigured(env)) await showBitrixMenu(env, user.tg_id);
+      else await showStructure(env, user.tg_id);
+      return true;
     case "/bitrix":
     case "/tasks":
       await showBitrixMenu(env, user.tg_id);
@@ -200,7 +206,15 @@ async function handleCallback(env: Env, cq: TgCallbackQuery): Promise<void> {
     await showReportMenu(env, chatId);
     return;
   }
-  const bx = /^bx:(my|overdue|stats|report:(?:all|open|overdue|week|mine|given|closed))$/.exec(cq.data ?? "");
+  // The company structure: a department (0 — the whole company) or a person, the pressed message edited in place.
+  const dep = /^bx:(dep|who):(\d+)$/.exec(cq.data ?? "");
+  if (dep) {
+    await new Telegram(env).answerCallback(cq.id).catch(() => undefined);
+    const view = dep[1] === "dep" ? { dep: Number(dep[2]) } : { who: Number(dep[2]) };
+    await showStructure(env, chatId, view, cq.message?.message_id);
+    return;
+  }
+  const bx = /^bx:(my|overdue|stats|report:(?:all|open|overdue|week|mine|given|closed)|wt:\d+)$/.exec(cq.data ?? "");
   if (bx) {
     await new Telegram(env).answerCallback(cq.id, bx[1]!.startsWith("report:") ? "Готую звіт…" : undefined).catch(() => undefined);
     await env.jobs.send({ type: "bitrix", chatId, action: bx[1] as BitrixAction });

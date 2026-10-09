@@ -227,7 +227,7 @@ function guarded(tools: Tool[], yes: boolean): Tool[] {
 }
 
 /** Tools that only read; any other tool call changes the calendar or the mailbox. */
-const READ_ONLY = /^(get_|check_free_busy|msg_get|thread_get|draft_get|label_get|attachment_read|find_|list_tasks|task_stats|remember_fact|forget_fact|drive_search|drive_read|sheets_read|note_search)/;
+const READ_ONLY = /^(get_|company_structure|check_free_busy|msg_get|thread_get|draft_get|label_get|attachment_read|find_|list_tasks|task_stats|remember_fact|forget_fact|drive_search|drive_read|sheets_read|note_search)/;
 
 function tracking(ctx: RunContext) {
   return (name: string) => {

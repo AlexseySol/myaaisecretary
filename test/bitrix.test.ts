@@ -87,6 +87,8 @@ function bitrixRoute(writes: { method: string; body: Record<string, unknown> }[]
             users: [{ id: 9, name: "Олена Коваль" }],
           },
         });
+      case "department.get":
+        return Response.json({ result: [{ ID: "1", NAME: "Компанія", SORT: "100", UF_HEAD: "1" }, { ID: "2", NAME: "Продажі", SORT: "200", PARENT: "1", UF_HEAD: "9" }] });
       case "tasks.task.get":
         return Response.json({ result: { task: { id: String(body.taskId) } } });
       case "task.stages.get":
@@ -130,7 +132,7 @@ describe("Bitrix24 task agent", () => {
   it("reads, comments and creates — no tool can close, change or delete a task", () => {
     const { env } = testEnv({ BITRIX_WEBHOOK_URL: WEBHOOK });
     const names = bitrixTools(env).map((t) => t.spec.name);
-    expect(names).toEqual(["find_user", "list_tasks", "get_task", "get_task_comments", "add_comment", "find_chat", "send_chat_message", "send_direct_message", "create_task", "find_project", "task_stats"]);
+    expect(names).toEqual(["find_user", "company_structure", "list_tasks", "get_task", "get_task_comments", "add_comment", "find_chat", "send_chat_message", "send_direct_message", "create_task", "find_project", "task_stats"]);
     expect(names.join(" ")).not.toMatch(/delete|close|complete|update|defer|delegate/);
   });
 
@@ -226,7 +228,7 @@ describe("/bitrix menu and the Excel report", () => {
     await handleUpdate(env, update("/bitrix"));
     const menu = tgCalls(calls, "sendMessage").at(-1)!;
     expect((menu.reply_markup as { inline_keyboard: { callback_data: string }[][] }).inline_keyboard.flat().map((b) => b.callback_data)).toEqual([
-      "bx:my", "bx:overdue", "bx:stats", "bx:report",
+      "bx:my", "bx:overdue", "bx:stats", "bx:report", "bx:dep:0",
     ]);
     await handleUpdate(env, { update_id: 3, callback_query: { id: "c", from: { id: OWNER, is_bot: false, first_name: "О" }, data: "bx:my" } });
     await runJobs(env, jobs);
